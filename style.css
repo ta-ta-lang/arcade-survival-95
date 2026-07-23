@@ -1,0 +1,163 @@
+/* ==========================================
+   1. BASE PAGE & LAYOUT STYLES
+   ========================================== */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+body {
+    background-color: #121212;
+    color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    padding: 20px;
+    overflow-x: hidden;
+}
+
+/* ==========================================
+   2. PLAYER STATS & SURVIVAL BARS
+   ========================================== */
+.stats-container {
+    width: 100%;
+    max-width: 400px;
+    background: #1e1e1e;
+    border: 2px solid #444;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.stat-box {
+    margin-bottom: 10px;
+}
+
+.stat-label {
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 4px;
+    display: block;
+}
+
+.bar-bg {
+    width: 100%;
+    height: 18px;
+    background-color: #333;
+    border-radius: 9px;
+    overflow: hidden;
+    border: 1px solid #555;
+}
+
+#hunger-bar {
+    height: 100%;
+    width: 100%;
+    background-color: #ff9800; /* Orange */
+    transition: width 0.3s ease;
+}
+
+#energy-bar {
+    height: 100%;
+    width: 100%;
+    background-color: #2196f3; /* Blue */
+    transition: width 0.3s ease;
+}
+
+#hygiene-bar {
+    height: 100%;
+    width: 100%;
+    background-color: #4caf50; /* Green */
+    transition: width 0.3s ease;
+}
+
+.currency-display {
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+    margin-top: 10px;
+    font-size: 16px;
+}
+
+/* ==========================================
+   3. CENTER NOTIFICATION POPUP (CENTER OF SCREEN)
+   ========================================== */
+#center-notification {
+    position: fixed;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(0, 0, 0, 0.9);
+    color: #fff;
+    border: 2px solid #555;
+    padding: 15px 30px;
+    border-radius: 8px;
+    font-size: 20px;
+    font-weight: bold;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+    z-index: 9999;
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+}
+
+#center-notification.show {
+    opacity: 1;
+}
+
+/* ==========================================
+   4. MINECRAFT 9-SLOT HOTBAR UI
+   ========================================== */
+.hotbar-container {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    background-color: #8b8b8b;
+    border: 4px solid #373737;
+    padding: 4px;
+    gap: 4px;
+    z-index: 1000;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.8);
+}
+
+.hotbar-slot {
+    width: 50px;
+    height: 50px;
+    background-color: #8b8b8b;
+    border: 3px inset #ffffff;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Highlighted border when slot is selected (Keys 1-9) */
+.hotbar-slot.selected {
+    border: 4px solid #ffffff;
+    outline: 2px solid #000000;
+    background-color: #a0a0a0;
+}
+
+.hotbar-slot .slot-num {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 11px;
+    color: #fff;
+    font-weight: bold;
+    text-shadow: 1px 1px 0px #000;
+}
+
+.hotbar-slot .item-icon {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+}
