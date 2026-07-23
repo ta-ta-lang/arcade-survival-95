@@ -1,5 +1,5 @@
 // ==========================================
-// 1. STATS, DECAY & DEATH SYSTEM
+// 1. STATS, DECAY & FLOATING NOTIFICATIONS
 // ==========================================
 const playerStats = {
     hunger: 100, maxHunger: 100,
@@ -24,7 +24,7 @@ const playerStats = {
         }
 
         if (this.hygiene < 15 && checkDistanceToNaomi() < 220) {
-            startNaomiBattle("RULE VIOLATION: Poor Hygiene near Naomi's Counter!");
+            startNaomiBattle("RULE VIOLATION: Uncleanliness detected near Naomi's Counter!");
         }
 
         this.updateUI();
@@ -36,7 +36,8 @@ const playerStats = {
         this.dailyTokens = 1000;
         resetMachinePlayLimits();
         this.updateUI();
-        showNotification("Slept well! Daily tokens & energy restored.");
+        showNotification("Rested in bed! Tokens & Energy fully restored.");
+        createFloatingText(player.x, player.y, "ZZZ... RESTED!", "#00ffcc");
     },
 
     updateUI() {
@@ -81,7 +82,19 @@ function showNotification(msg) {
     const el = document.getElementById('center-notification');
     el.innerText = msg;
     el.classList.add('show');
-    setTimeout(() => el.classList.remove('show'), 2500);
+    setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// Floating visual numbers (+50 CR, -8 Energy)
+const floatingTexts = [];
+function createFloatingText(x, y, text, color) {
+    floatingTexts.push({ x, y, text, color, alpha: 1.0, dy: -1.5 });
+}
+
+// Particle footstep system
+const particles = [];
+function addParticle(x, y) {
+    particles.push({ x, y, radius: Math.random() * 4 + 2, alpha: 0.6 });
 }
 
 // ==========================================
@@ -94,25 +107,22 @@ function useSelectedItem() {
 
     if (item.type === "food") {
         playerStats.hunger = Math.min(playerStats.maxHunger, playerStats.hunger + item.val);
-        showNotification(`Ate ${item.name}! +${item.val} Hunger.`);
+        createFloatingText(player.x, player.y, `+${item.val} HUNGER`, "#ff7043");
         playerStats.hotbar[idx] = null;
         playerStats.updateUI();
         return true;
     } else if (item.type === "hygiene") {
         playerStats.hygiene = playerStats.maxHygiene;
-        showNotification(`Used ${item.name}! Hygiene restored.`);
+        createFloatingText(player.x, player.y, `CLEANED!`, "#29b6f6");
         playerStats.hotbar[idx] = null;
         playerStats.updateUI();
         return true;
     } else if (item.type === "bed") {
-        if (playerStats.placedBed) {
-            showNotification("Bed is already placed!");
-            return true;
-        }
+        if (playerStats.placedBed) { showNotification("Bed is already placed!"); return true; }
         playerStats.placedBed = { x: player.x - 40, y: player.y + 60, w: 160, h: 100 };
         playerStats.hotbar[idx] = null;
         playerStats.updateUI();
-        showNotification("Bed placed! Press E near it to sleep.");
+        createFloatingText(player.x, player.y, "BED PLACED", "#ab47bc");
         return true;
     }
     return false;
@@ -124,16 +134,19 @@ function useSelectedItem() {
 let storyStep = 0;
 let bossHP = 1000;
 let isFinalBoss = false;
+let bossMode = "mash"; 
+let bossTimer = null;
+let bossMashCount = 0;
 
 const storyDialogue = [
     {
         header: ">_ TERMINAL LOG #01",
-        body: "I have to be quick... well done for figuring out the binary code from the high score boards.\n\nYou think you've only been trapped here a few months, don't you?",
+        body: "I have to be quick... well done decoding the binary scores from the arcade boards.\n\nYou think you've only been trapped here a few months, don't you?",
         btn: "Read Next"
     },
     {
         header: ">_ TERMINAL LOG #02",
-        body: "Look around you... each machine houses the soul of a person who attempted this challenge before you.\n\nThey are trapped in these cabinets for all eternity... and if you don't escape, you will become a machine too.",
+        body: "Look around you... each machine houses the soul of a player who tried this challenge before you.\n\nIf you fail, you'll be locked into an arcade cabinet for all eternity.",
         btn: "Ask question..."
     },
     {
@@ -143,8 +156,8 @@ const storyDialogue = [
     },
     {
         header: ">_ TERMINAL LOG #03",
-        body: "Any day now, you will become N40M1's next servant for all eternity.\n\nThere is only one way out: You must challenge N40M1 to a 1,000-Game Showdown and beat her at every game!",
-        btn: "Challenge N40M1!"
+        body: "Any day now, you will become N40M1's next permanent arcade cabinet servant.\n\nThere is only one way out: Challenge N40M1 to a 1,000-Game Showdown and beat her in real-time games!",
+        btn: "CHALLENGE N40M1!"
     }
 ];
 
@@ -155,7 +168,7 @@ function submitPasscode() {
         storyStep = 0;
         showStoryStep();
     } else {
-        showNotification("INVALID ACCESS CODE!");
+        showNotification("ACCESS DENIED: INCORRECT PASSCODE!");
     }
 }
 
@@ -181,36 +194,94 @@ function initiateNaomiShowdown() {
     isFinalBoss = true;
     bossHP = 1000;
     document.getElementById('battle-title').innerText = "NAOMI 1,000-GAME SHOWDOWN";
-    document.getElementById('battle-desc').innerText = "Naomi grins: 'Be warned! If you lose, your soul is mine forever!'";
+    document.getElementById('battle-desc').innerText = "Naomi grins: 'If you fail these rapid minigames, your soul is mine forever!'";
     document.getElementById('battle-modal').classList.remove('hidden');
+    startBossMinigameLoop();
     updateBossUI();
 }
 
 function startNaomiBattle(reason) {
     isFinalBoss = false;
-    bossHP = 100;
+    bossHP = 200;
     document.getElementById('battle-title').innerText = "NAOMI ENFORCEMENT BATTLE";
     document.getElementById('battle-desc').innerText = reason;
     document.getElementById('battle-modal').classList.remove('hidden');
+    startBossMinigameLoop();
     updateBossUI();
 }
 
-function attackNaomi() {
-    const dmg = isFinalBoss ? 50 : 25;
+function startBossMinigameLoop() {
+    bossMashCount = 0;
+    bossMode = Math.random() < 0.5 ? "mash" : "timing";
+    const promptEl = document.getElementById('boss-prompt');
+    
+    if (bossMode === "mash") {
+        promptEl.innerText = "CLICK 'ATTACK!' 10 TIMES QUICKLY!";
+    } else {
+        promptEl.innerText = "CLICK 'ATTACK!' WHEN THE METER IS IN THE GREEN ZONE!";
+    }
+
+    if (bossTimer) clearInterval(bossTimer);
+    bossTimer = setInterval(drawBossCanvas, 1000/30);
+}
+
+let meterPos = 0;
+let meterDir = 3;
+function drawBossCanvas() {
+    const bCanvas = document.getElementById('bossCanvas');
+    if (!bCanvas) return;
+    const bCtx = bCanvas.getContext('2d');
+    bCtx.fillStyle = '#050510'; bCtx.fillRect(0, 0, bCanvas.width, bCanvas.height);
+
+    if (bossMode === "mash") {
+        bCtx.fillStyle = '#ff0055'; bCtx.fillRect(20, 70, (bossMashCount / 10) * 300, 40);
+        bCtx.strokeStyle = '#fff'; bCtx.strokeRect(20, 70, 300, 40);
+        bCtx.fillStyle = '#fff'; bCtx.font = 'bold 16px Courier New'; bCtx.textAlign = 'center';
+        bCtx.fillText(`MASH: ${bossMashCount} / 10`, 170, 95);
+    } else {
+        meterPos += meterDir;
+        if (meterPos > 300 || meterPos < 0) meterDir *= -1;
+
+        bCtx.fillStyle = '#222'; bCtx.fillRect(20, 70, 300, 40);
+        bCtx.fillStyle = '#00ff00'; bCtx.fillRect(130, 70, 80, 40); // Target Green Zone
+        bCtx.fillStyle = '#ffcc00'; bCtx.fillRect(20 + meterPos, 65, 10, 50); // Meter Line
+    }
+}
+
+function handleBossAction() {
+    if (bossMode === "mash") {
+        bossMashCount++;
+        if (bossMashCount >= 10) {
+            damageBoss(isFinalBoss ? 150 : 75);
+            startBossMinigameLoop();
+        }
+    } else {
+        if (meterPos >= 110 && meterPos <= 190) {
+            damageBoss(isFinalBoss ? 200 : 100);
+            showNotification("CRITICAL HIT!");
+        } else {
+            showNotification("MISSED TIMING!");
+        }
+        startBossMinigameLoop();
+    }
+}
+
+function damageBoss(dmg) {
     bossHP -= dmg;
     if (bossHP <= 0) {
+        clearInterval(bossTimer);
         closeModal('battle-modal');
         if (isFinalBoss) {
             triggerVictoryEnding();
         } else {
-            showNotification("Naomi backed off! Maintain hygiene!");
+            showNotification("Naomi backed off! Keep your hygiene high!");
         }
     }
     updateBossUI();
 }
 
 function updateBossUI() {
-    const max = isFinalBoss ? 1000 : 100;
+    const max = isFinalBoss ? 1000 : 200;
     const pct = Math.max(0, (bossHP / max) * 100);
     document.getElementById('boss-hp-bar').style.width = `${pct}%`;
     document.getElementById('boss-hp-text').innerText = `${Math.max(0, bossHP)} / ${max}`;
@@ -224,15 +295,84 @@ function triggerVictoryEnding() {
     document.getElementById('gameover-title').style.color = "#00ff00";
     document.getElementById('death-reason').innerHTML = `
         <span style="color:#00ff00;">N40M1 EXPLODES IN NEON SPARKS!</span><br><br>
-        All trapped souls are released from the arcade cabinets and turn back into human beings.<br>
-        In the distance, you see 'FFB' step out... It's <strong>FREDDY FAZBEAR</strong>! He blows you a kiss and waves goodbye as everyone escapes!<br><br>
+        All trapped souls are released from the arcade cabinets and return to human form.<br>
+        In the distance, 'FFB' steps out... It's <strong>FREDDY FAZBEAR</strong>! He blows a kiss and waves goodbye as everyone escapes!<br><br>
         The time-dilation lifts: exactly 1 year has passed outside. You walk free with <strong>$1 BILLION CREDITS!</strong>
     `;
     document.getElementById('gameover-modal').classList.remove('hidden');
 }
 
 // ==========================================
-// 4. SHOP & MACHINES
+// 4. ACTION MINIGAME SYSTEM (Dig Dug, Time Crisis, etc.)
+// ==========================================
+const machinePlays = {};
+
+function launchActionMinigame(title, cost, winReward) {
+    if ((machinePlays[title] || 0) >= 3) { showNotification("Machine out of order today! Sleep in bed."); return; }
+    if (playerStats.dailyTokens < cost) { showNotification("Not enough Tokens!"); return; }
+
+    playerStats.dailyTokens -= cost;
+    playerStats.energy = Math.max(0, playerStats.energy - 8);
+    machinePlays[title] = (machinePlays[title] || 0) + 1;
+    playerStats.updateUI();
+
+    document.getElementById('action-title').innerText = title;
+    document.getElementById('action-desc').innerText = `Click the targets as they appear to earn up to ${winReward} Credits!`;
+    document.getElementById('action-minigame-modal').classList.remove('hidden');
+
+    runTargetMinigame(winReward);
+}
+
+function runTargetMinigame(maxWin) {
+    const aCanvas = document.getElementById('actionCanvas');
+    const aCtx = aCanvas.getContext('2d');
+    let target = { x: 180, y: 140, r: 25 };
+    let score = 0;
+    let clicks = 0;
+
+    function newTarget() {
+        target.x = Math.random() * 280 + 40;
+        target.y = Math.random() * 200 + 40;
+    }
+
+    function draw() {
+        aCtx.fillStyle = '#050515'; aCtx.fillRect(0, 0, 360, 280);
+        aCtx.fillStyle = '#ff0055'; aCtx.beginPath(); aCtx.arc(target.x, target.y, target.r, 0, Math.PI*2); aCtx.fill();
+        aCtx.fillStyle = '#fff'; aCtx.font = 'bold 12px Courier New'; aCtx.textAlign = 'center';
+        aCtx.fillText(`HITS: ${score} / 5`, 180, 20);
+    }
+
+    aCanvas.onclick = (e) => {
+        const rect = aCanvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        if (Math.hypot(mx - target.x, my - target.y) < target.r) {
+            score++;
+            newTarget();
+        }
+        clicks++;
+
+        if (score >= 5 || clicks >= 8) {
+            aCanvas.onclick = null;
+            closeModal('action-minigame-modal');
+            const earned = Math.floor((score / 5) * maxWin);
+            playerStats.credits += earned;
+            playerStats.updateUI();
+            createFloatingText(player.x, player.y, `+${earned} CREDITS!`, "#ffcc00");
+            showNotification(`Minigame Complete! Earned ${earned} Credits.`);
+        } else {
+            draw();
+        }
+    };
+
+    draw();
+}
+
+function resetMachinePlayLimits() { for (let k in machinePlays) machinePlays[k] = 0; }
+
+// ==========================================
+// 5. NAOMI SHOP
 // ==========================================
 const naomiShop = {
     steak: { name: "Steak", cost: 50, type: "food", val: 40, color: "#ff7043" },
@@ -253,33 +393,18 @@ function buyFromNaomi(key) {
     showNotification(`Bought ${item.name}! Check hotbar.`);
 }
 
-const machinePlays = {};
-function playMachine(name, cost, win) {
-    if ((machinePlays[name] || 0) >= 3) { showNotification("Machine out of order today! Sleep in bed."); return; }
-    if (playerStats.dailyTokens < cost) { showNotification("Not enough Tokens!"); return; }
-
-    playerStats.dailyTokens -= cost;
-    playerStats.energy = Math.max(0, playerStats.energy - 8);
-    machinePlays[name] = (machinePlays[name] || 0) + 1;
-    playerStats.credits += win;
-    playerStats.updateUI();
-    showNotification(`Played ${name}! +${win} Credits! Score: FFB [BINARY CLUE]`);
-}
-
-function resetMachinePlayLimits() { for (let k in machinePlays) machinePlays[k] = 0; }
-
 // ==========================================
-// 5. PLAYABLE MINIGAMES
+// 6. MINI-GAMES (Flappy, Dodge, Catch)
 // ==========================================
 // Flappy Bird
 const fCtx = document.getElementById('flappyCanvas').getContext('2d');
-let fBird = { y: 180, vy: 0 }, fPipes = [], fScore = 0, fTimer = null;
+let fBird = { y: 180, vy: 0 }, fPipes = [], fTimer = null;
 
 function startFlappy() {
     if (playerStats.dailyTokens < 30) { showNotification("Need 30 Tokens!"); return; }
     playerStats.dailyTokens -= 30; playerStats.updateUI();
     document.getElementById('flappy-modal').classList.remove('hidden');
-    fBird.y = 180; fBird.vy = 0; fPipes = []; fScore = 0;
+    fBird.y = 180; fBird.vy = 0; fPipes = [];
     if (fTimer) clearInterval(fTimer);
     fTimer = setInterval(runFlappy, 1000/60);
 }
@@ -291,7 +416,7 @@ function runFlappy() {
     }
     fPipes.forEach(p => p.x -= 2.5);
     fPipes.forEach(p => {
-        if (!p.passed && p.x < 60) { p.passed = true; fScore++; playerStats.credits += 15; playerStats.updateUI(); }
+        if (!p.passed && p.x < 60) { p.passed = true; playerStats.credits += 15; playerStats.updateUI(); createFloatingText(player.x, player.y, "+15 CR", "#ffcc00"); }
         if (60 > p.x && 60 < p.x + 40 && (fBird.y < p.top || fBird.y > p.top + 110)) { clearInterval(fTimer); closeModal('flappy-modal'); }
     });
     fCtx.fillStyle = '#70c5ce'; fCtx.fillRect(0, 0, 360, 380);
@@ -301,13 +426,13 @@ function runFlappy() {
 
 // Cyber Dodge
 const dCtx = document.getElementById('dodgeCanvas').getContext('2d');
-let dPlayerX = 160, dObs = [], dScore = 0, dTimer = null;
+let dPlayerX = 160, dObs = [], dTimer = null;
 
 function startDodge() {
     if (playerStats.dailyTokens < 30) { showNotification("Need 30 Tokens!"); return; }
     playerStats.dailyTokens -= 30; playerStats.updateUI();
     document.getElementById('dodge-modal').classList.remove('hidden');
-    dPlayerX = 160; dObs = []; dScore = 0;
+    dPlayerX = 160; dObs = [];
     if (dTimer) clearInterval(dTimer);
     dTimer = setInterval(runDodge, 1000/60);
 }
@@ -317,7 +442,7 @@ function runDodge() {
     dObs.forEach(o => o.y += o.speed);
     dObs.forEach((o, i) => {
         if (o.y > 350 && Math.abs(o.x - dPlayerX) < 30) { clearInterval(dTimer); closeModal('dodge-modal'); }
-        if (o.y > 380) { dObs.splice(i, 1); dScore++; playerStats.credits += 10; playerStats.updateUI(); }
+        if (o.y > 380) { dObs.splice(i, 1); playerStats.credits += 10; playerStats.updateUI(); createFloatingText(player.x, player.y, "+10 CR", "#ffcc00"); }
     });
     dCtx.fillStyle = '#050515'; dCtx.fillRect(0, 0, 360, 380);
     dCtx.fillStyle = '#00d2ff'; dCtx.fillRect(dPlayerX, 340, 40, 20);
@@ -326,13 +451,13 @@ function runDodge() {
 
 // Neon Catch
 const cCtx = document.getElementById('catchCanvas').getContext('2d');
-let cPaddleX = 150, cItems = [], cScore = 0, cTimer = null;
+let cPaddleX = 150, cItems = [], cTimer = null;
 
 function startCatch() {
     if (playerStats.dailyTokens < 30) { showNotification("Need 30 Tokens!"); return; }
     playerStats.dailyTokens -= 30; playerStats.updateUI();
     document.getElementById('catch-modal').classList.remove('hidden');
-    cPaddleX = 150; cItems = []; cScore = 0;
+    cPaddleX = 150; cItems = [];
     if (cTimer) clearInterval(cTimer);
     cTimer = setInterval(runCatch, 1000/60);
 }
@@ -342,7 +467,7 @@ function runCatch() {
     cItems.forEach(it => it.y += 3);
     cItems.forEach((it, i) => {
         if (it.y > 340 && it.x > cPaddleX - 10 && it.x < cPaddleX + 60) {
-            cItems.splice(i, 1); cScore++; playerStats.credits += 20; playerStats.updateUI();
+            cItems.splice(i, 1); playerStats.credits += 20; playerStats.updateUI(); createFloatingText(player.x, player.y, "+20 CR", "#ffcc00");
         } else if (it.y > 380) cItems.splice(i, 1);
     });
     cCtx.fillStyle = '#100515'; cCtx.fillRect(0, 0, 360, 380);
@@ -362,7 +487,7 @@ window.addEventListener('keydown', e => {
 });
 
 // ==========================================
-// 6. RENDER WORLD & CANVAS GRAPHICS
+// 7. RENDER WORLD & ANIMATIONS
 // ==========================================
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -373,7 +498,7 @@ const player = { x: 600, y: 500, w: 80, h: 80, speed: 7.5 };
 
 const worldObjects = [
     { id: 'naomi', name: "Naomi's Counter", x: 600, y: 80, w: 360, h: 140 },
-    { id: 'flappy', name: "FLAPPY BIRD", x: 100, y: 260, w: 160, h: 240, color: '#ffca28' },
+    { id: 'flappy', name: "FLAPPY BIRD", x: 100, y: 260, w: 160, h: 240, color: '#ffcc00' },
     { id: 'dodge', name: "CYBER DODGE", x: 300, y: 260, w: 160, h: 240, color: '#00d2ff' },
     { id: 'catch', name: "NEON CATCH", x: 500, y: 260, w: 160, h: 240, color: '#ff0055' },
 
@@ -406,10 +531,7 @@ function checkInteraction() {
     if (playerStats.placedBed) {
         const bed = playerStats.placedBed;
         const distBed = Math.hypot((bed.x + bed.w/2) - (player.x + player.w/2), (bed.y + bed.h/2) - (player.y + player.h/2));
-        if (distBed < 180) {
-            playerStats.sleep();
-            return;
-        }
+        if (distBed < 180) { playerStats.sleep(); return; }
     }
 
     if (!near) return;
@@ -418,7 +540,7 @@ function checkInteraction() {
     else if (near.id === 'dodge') startDodge();
     else if (near.id === 'catch') startCatch();
     else if (near.id === 'cursed') document.getElementById('cursed-modal').classList.remove('hidden');
-    else if (near.id.startsWith('m')) playMachine(near.name, near.cost, near.win);
+    else if (near.id.startsWith('m')) launchActionMinigame(near.name, near.cost, near.win);
     else if (near.id === 'terminal') document.getElementById('terminal-modal').classList.remove('hidden');
 }
 
@@ -498,15 +620,36 @@ function drawWorld() {
     });
 
     if (playerStats.placedBed) drawPlacedBed(playerStats.placedBed);
+
+    // Render particles
+    particles.forEach((p, i) => {
+        ctx.fillStyle = `rgba(255,255,255,${p.alpha})`;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2); ctx.fill();
+        p.alpha -= 0.02;
+        if (p.alpha <= 0) particles.splice(i, 1);
+    });
+
     drawPlayerSprite();
+
+    // Render floating text numbers
+    floatingTexts.forEach((ft, i) => {
+        ctx.fillStyle = ft.color;
+        ctx.font = 'bold 16px Courier New';
+        ctx.fillText(ft.text, ft.x + 40, ft.y);
+        ft.y += ft.dy;
+        ft.alpha -= 0.02;
+        if (ft.alpha <= 0) floatingTexts.splice(i, 1);
+    });
 }
 
 function gameLoop() {
+    let moved = false;
     if (!playerStats.isDead) {
-        if (keys['w'] || keys['arrowup']) player.y = Math.max(20, player.y - player.speed);
-        if (keys['s'] || keys['arrowdown']) player.y = Math.min(canvas.height - player.h - 20, player.y + player.speed);
-        if (keys['a'] || keys['arrowleft']) player.x = Math.max(20, player.x - player.speed);
-        if (keys['d'] || keys['arrowright']) player.x = Math.min(canvas.width - player.w - 20, player.x + player.speed);
+        if (keys['w'] || keys['arrowup']) { player.y = Math.max(20, player.y - player.speed); moved = true; }
+        if (keys['s'] || keys['arrowdown']) { player.y = Math.min(canvas.height - player.h - 20, player.y + player.speed); moved = true; }
+        if (keys['a'] || keys['arrowleft']) { player.x = Math.max(20, player.x - player.speed); moved = true; }
+        if (keys['d'] || keys['arrowright']) { player.x = Math.min(canvas.width - player.w - 20, player.x + player.speed); moved = true; }
+        if (moved && Math.random() < 0.3) addParticle(player.x + 40, player.y + 70);
     }
     drawWorld();
     requestAnimationFrame(gameLoop);
