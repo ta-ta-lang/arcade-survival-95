@@ -1,539 +1,281 @@
-// ==========================================
-// 1. STATS, DECAY & DEATH SYSTEM
-// ==========================================
-const playerStats = {
-    hunger: 100, maxHunger: 100,
-    energy: 100, maxEnergy: 100,
-    hygiene: 100, maxHygiene: 100,
-    dailyTokens: 1000, credits: 0,
-    hotbar: new Array(9).fill(null),
-    selectedSlot: 0,
-    placedBed: null, // Stores {x, y, w, h} when placed
-    isDead: false,
-
-    decay() {
-        if (this.isDead) return;
-
-        this.hunger = Math.max(0, this.hunger - 0.4);
-        this.energy = Math.max(0, this.energy - 0.3);
-        this.hygiene = Math.max(0, this.hygiene - 0.2);
-
-        if (this.hunger <= 0) {
-            triggerGameOver("You passed out from severe starvation!");
-            return;
-        }
-
-        if (this.hygiene < 15 && checkDistanceToNaomi() < 220) {
-            startNaomiBattle("RULE VIOLATION: Poor Hygiene near Naomi's Counter!");
-        }
-
-        this.updateUI();
-    },
-
-    sleep() {
-        if (!this.placedBed) { showNotification("Buy and place a bed first!"); return; }
-        this.energy = this.maxEnergy;
-        this.dailyTokens = 1000;
-        resetMachinePlayLimits();
-        this.updateUI();
-        showNotification("Slept well! Tokens & Energy fully restored.");
-    },
-
-    updateUI() {
-        document.getElementById('hunger-bar').style.width = `${this.hunger}%`;
-        document.getElementById('energy-bar').style.width = `${this.energy}%`;
-        document.getElementById('hygiene-bar').style.width = `${this.hygiene}%`;
-        document.getElementById('token-display').innerText = this.dailyTokens;
-        document.getElementById('credit-display').innerText = this.credits;
-        this.renderHotbar();
-    },
-
-    renderHotbar() {
-        const container = document.getElementById('hotbar-container');
-        if (!container) return;
-        let html = '';
-        for (let i = 0; i < 9; i++) {
-            const item = this.hotbar[i];
-            const isSel = (i === this.selectedSlot) ? 'selected' : '';
-            const content = item ? `<div class="item-badge" style="background:${item.color}">${item.name}</div>` : '';
-            html += `<div class="hotbar-slot ${isSel}" onclick="selectSlot(${i})"><span class="slot-num">${i + 1}</span>${content}</div>`;
-        }
-        container.innerHTML = html;
-    }
+// Game State Tracker
+const state = {
+  day: 1,
+  tokens: 1000,
+  credits: 0,
+  timeDilationAbility: false,
+  hasBed: false,
+  discoveredFFB: false,
+  unlockedCabinet: false,
+  naomiChallenged: false,
+  gamesWonAgainstNaomi: 0,
+  gamesLostToNaomi: 0
 };
 
-setInterval(() => playerStats.decay(), 2000);
+// DOM Elements
+const statDay = document.getElementById('stat-day');
+const statTokens = document.getElementById('stat-tokens');
+const statCredits = document.getElementById('stat-credits');
+const statTime = document.getElementById('stat-time');
+const storyText = document.getElementById('story-text');
+const choicesContainer = document.getElementById('choices-container');
 
-function triggerGameOver(reason) {
-    playerStats.isDead = true;
-    document.getElementById('death-reason').innerText = reason;
-    document.getElementById('gameover-modal').classList.remove('hidden');
+// Helper to update the UI Bar
+function updateUI() {
+  statDay.innerText = state.day;
+  statTokens.innerText = state.tokens;
+  statCredits.innerText = state.credits;
+  statTime.innerText = state.timeDilationAbility ? "Active (10% Speed)" : "Off";
 }
 
-function selectSlot(idx) {
-    playerStats.selectedSlot = idx;
-    playerStats.updateUI();
+// Helper to print text to story window
+function renderText(text) {
+  storyText.innerHTML = `<p>${text}</p>`;
 }
 
-function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
-
-function showNotification(msg) {
-    const el = document.getElementById('center-notification');
-    el.innerText = msg;
-    el.classList.add('show');
-    setTimeout(() => el.classList.remove('show'), 2200);
+// Helper to render choice buttons
+function renderChoices(choices) {
+  choicesContainer.innerHTML = '';
+  choices.forEach(choice => {
+    const button = document.createElement('button');
+    button.className = 'btn';
+    button.innerText = choice.text;
+    button.onclick = choice.action;
+    choicesContainer.appendChild(button);
+  });
 }
 
-// ==========================================
-// 2. ITEM USE & BED PLACEMENT
-// ==========================================
-function useSelectedItem() {
-    const idx = playerStats.selectedSlot;
-    const item = playerStats.hotbar[idx];
-    if (!item) return false;
+// --- STORY SCENES ---
 
-    if (item.type === "food") {
-        playerStats.hunger = Math.min(playerStats.maxHunger, playerStats.hunger + item.val);
-        showNotification(`Ate ${item.name}! +${item.val} Hunger.`);
-        playerStats.hotbar[idx] = null;
-        playerStats.updateUI();
-        return true;
-    } else if (item.type === "hygiene") {
-        playerStats.hygiene = playerStats.maxHygiene;
-        showNotification(`Used ${item.name}! Hygiene restored.`);
-        playerStats.hotbar[idx] = null;
-        playerStats.updateUI();
-        return true;
-    } else if (item.type === "bed") {
-        if (playerStats.placedBed) {
-            showNotification("Bed is already placed in the world!");
-            return true;
-        }
-        // Place bed right where the player is standing!
-        playerStats.placedBed = { x: player.x - 40, y: player.y + 60, w: 160, h: 100 };
-        playerStats.hotbar[idx] = null;
-        playerStats.updateUI();
-        showNotification("Bed placed! Walk to it and press E to sleep.");
-        return true;
-    }
-    return false;
+// Scene 1: Introduction
+function sceneStart() {
+  updateUI();
+  renderText(
+    "Welcome to the $1 Billion Arcade Challenge. The rules are simple: Survive 1 year alone inside a boarded-up Dave & Buster's. Every day you receive 1,000 non-transferable tokens. Play arcade games to win credits, and trade those credits with N40M1 (Naomi), the robot clerk, for necessities."
+  );
+
+  renderChoices([
+    { text: "Explore the arcade games", action: sceneArcadeFloor },
+    { text: "Visit N40M1 at the Credit Counter", action: sceneCounter },
+    { text: "Look around for anything unusual", action: sceneSecretCabinet }
+  ]);
 }
 
-// ==========================================
-// 3. SECRET TERMINAL & NAOMI BOSS SHOWDOWN
-// ==========================================
-let bossHP = 100;
-let isFinalBoss = false;
+// Scene 2: Arcade Floor
+function sceneArcadeFloor() {
+  renderText(
+    "You walk past endless rows of flashing arcades. You can play quick, low-cost games like Skee-Ball, or go for high-stakes games like Flappy Bird."
+  );
 
-function submitPasscode() {
-    const input = document.getElementById('terminal-input').value.trim().toUpperCase();
-    closeModal('terminal-modal');
-
-    if (input === "DONTTRUSTNAOMI") {
-        isFinalBoss = true;
-        bossHP = 1000;
-        document.getElementById('battle-title').innerText = "NAOMI 1,000-GAME SHOWDOWN";
-        document.getElementById('battle-desc').innerText = "Defeat Naomi to restore trapped souls and win $1 Billion!";
-        document.getElementById('battle-modal').classList.remove('hidden');
-        updateBossUI();
-    } else {
-        showNotification("INVALID ACCESS CODE!");
-    }
-}
-
-function startNaomiBattle(reason) {
-    isFinalBoss = false;
-    bossHP = 100;
-    document.getElementById('battle-title').innerText = "NAOMI ENFORCEMENT BATTLE";
-    document.getElementById('battle-desc').innerText = reason;
-    document.getElementById('battle-modal').classList.remove('hidden');
-    updateBossUI();
-}
-
-function attackNaomi() {
-    const dmg = isFinalBoss ? 25 : 20;
-    bossHP -= dmg;
-    if (bossHP <= 0) {
-        closeModal('battle-modal');
-        if (isFinalBoss) {
-            playerStats.credits += 1000000000;
-            playerStats.updateUI();
-            showNotification("YOU DEFEATED NAOMI! SOULS RESTORED & $1 BILLION CREDITS WON!", 5000);
+  let choices = [
+    {
+      text: "Play Skee-Ball (Costs 10 Tokens, Wins 50 Credits)",
+      action: () => {
+        if (state.tokens >= 10) {
+          state.tokens -= 10;
+          state.credits += 50;
+          updateUI();
+          renderText("You score nicely on Skee-Ball and pocket 50 credits!");
         } else {
-            showNotification("Naomi backed off! Keep your hygiene clean!");
+          renderText("You don't have enough tokens left today!");
         }
-    }
-    updateBossUI();
-}
-
-function updateBossUI() {
-    const max = isFinalBoss ? 1000 : 100;
-    const pct = Math.max(0, (bossHP / max) * 100);
-    document.getElementById('boss-hp-bar').style.width = `${pct}%`;
-    document.getElementById('boss-hp-text').innerText = `${bossHP} / ${max}`;
-}
-
-// ==========================================
-// 4. SHOP & MACHINES
-// ==========================================
-const naomiShop = {
-    steak: { name: "Steak", cost: 50, type: "food", val: 40, color: "#ff7043" },
-    snack: { name: "Snack", cost: 15, type: "food", val: 15, color: "#ffca28" },
-    soap: { name: "Soap", cost: 30, type: "hygiene", val: 100, color: "#29b6f6" },
-    bed: { name: "Bed", cost: 200, type: "bed", val: 0, color: "#ab47bc" }
-};
-
-function buyFromNaomi(key) {
-    const item = naomiShop[key];
-    if (playerStats.credits < item.cost) { showNotification("Not enough credits!"); return; }
-    const emptyIdx = playerStats.hotbar.findIndex(s => s === null);
-    if (emptyIdx === -1) { showNotification("Hotbar full!"); return; }
-
-    playerStats.credits -= item.cost;
-    playerStats.hotbar[emptyIdx] = { ...item };
-    playerStats.updateUI();
-    showNotification(`Bought ${item.name}! Check your hotbar.`);
-}
-
-const machinePlays = {};
-function playMachine(name, cost, win) {
-    if ((machinePlays[name] || 0) >= 3) { showNotification("Machine out of order today! Sleep in bed."); return; }
-    if (playerStats.dailyTokens < cost) { showNotification("Not enough Tokens!"); return; }
-
-    playerStats.dailyTokens -= cost;
-    playerStats.energy = Math.max(0, playerStats.energy - 8);
-    machinePlays[name] = (machinePlays[name] || 0) + 1;
-    playerStats.credits += win;
-    playerStats.updateUI();
-    showNotification(`Played ${name}! +${win} Credits!`);
-}
-
-function resetMachinePlayLimits() { for (let k in machinePlays) machinePlays[k] = 0; }
-
-// ==========================================
-// 5. PLAYABLE MINIGAMES (Flappy, Dodge, Catch)
-// ==========================================
-// A. Flappy Bird
-const fCtx = document.getElementById('flappyCanvas').getContext('2d');
-let fBird = { y: 180, vy: 0 }, fPipes = [], fScore = 0, fTimer = null;
-
-function startFlappy() {
-    if (playerStats.dailyTokens < 30) { showNotification("Need 30 Tokens!"); return; }
-    playerStats.dailyTokens -= 30; playerStats.updateUI();
-    document.getElementById('flappy-modal').classList.remove('hidden');
-    fBird.y = 180; fBird.vy = 0; fPipes = []; fScore = 0;
-    if (fTimer) clearInterval(fTimer);
-    fTimer = setInterval(runFlappy, 1000/60);
-}
-
-function runFlappy() {
-    fBird.vy += 0.4; fBird.y += fBird.vy;
-    if (fPipes.length === 0 || fPipes[fPipes.length - 1].x < 200) {
-        fPipes.push({ x: 360, top: Math.random() * 180 + 30, passed: false });
-    }
-    fPipes.forEach(p => p.x -= 2.5);
-    fPipes.forEach(p => {
-        if (!p.passed && p.x < 60) { p.passed = true; fScore++; playerStats.credits += 15; playerStats.updateUI(); }
-        if (60 > p.x && 60 < p.x + 40 && (fBird.y < p.top || fBird.y > p.top + 110)) { clearInterval(fTimer); closeModal('flappy-modal'); }
-    });
-    fCtx.fillStyle = '#70c5ce'; fCtx.fillRect(0, 0, 360, 380);
-    fPipes.forEach(p => { fCtx.fillStyle = '#2e7d32'; fCtx.fillRect(p.x, 0, 40, p.top); fCtx.fillRect(p.x, p.top + 110, 40, 380); });
-    fCtx.fillStyle = '#ffca28'; fCtx.beginPath(); fCtx.arc(60, fBird.y, 12, 0, Math.PI*2); fCtx.fill();
-}
-
-// B. Cyber Dodge
-const dCtx = document.getElementById('dodgeCanvas').getContext('2d');
-let dPlayerX = 160, dObs = [], dScore = 0, dTimer = null;
-
-function startDodge() {
-    if (playerStats.dailyTokens < 30) { showNotification("Need 30 Tokens!"); return; }
-    playerStats.dailyTokens -= 30; playerStats.updateUI();
-    document.getElementById('dodge-modal').classList.remove('hidden');
-    dPlayerX = 160; dObs = []; dScore = 0;
-    if (dTimer) clearInterval(dTimer);
-    dTimer = setInterval(runDodge, 1000/60);
-}
-
-function runDodge() {
-    if (Math.random() < 0.05) dObs.push({ x: Math.random() * 320, y: 0, speed: Math.random() * 3 + 2 });
-    dObs.forEach(o => o.y += o.speed);
-    dObs.forEach((o, i) => {
-        if (o.y > 350 && Math.abs(o.x - dPlayerX) < 30) { clearInterval(dTimer); closeModal('dodge-modal'); }
-        if (o.y > 380) { dObs.splice(i, 1); dScore++; playerStats.credits += 10; playerStats.updateUI(); }
-    });
-    dCtx.fillStyle = '#050515'; dCtx.fillRect(0, 0, 360, 380);
-    dCtx.fillStyle = '#00d2ff'; dCtx.fillRect(dPlayerX, 340, 40, 20);
-    dCtx.fillStyle = '#ff0055'; dObs.forEach(o => dCtx.fillRect(o.x, o.y, 25, 25));
-}
-
-// C. Neon Catch
-const cCtx = document.getElementById('catchCanvas').getContext('2d');
-let cPaddleX = 150, cItems = [], cScore = 0, cTimer = null;
-
-function startCatch() {
-    if (playerStats.dailyTokens < 30) { showNotification("Need 30 Tokens!"); return; }
-    playerStats.dailyTokens -= 30; playerStats.updateUI();
-    document.getElementById('catch-modal').classList.remove('hidden');
-    cPaddleX = 150; cItems = []; cScore = 0;
-    if (cTimer) clearInterval(cTimer);
-    cTimer = setInterval(runCatch, 1000/60);
-}
-
-function runCatch() {
-    if (Math.random() < 0.04) cItems.push({ x: Math.random() * 330, y: 0 });
-    cItems.forEach(it => it.y += 3);
-    cItems.forEach((it, i) => {
-        if (it.y > 340 && it.x > cPaddleX - 10 && it.x < cPaddleX + 60) {
-            cItems.splice(i, 1); cScore++; playerStats.credits += 20; playerStats.updateUI();
-        } else if (it.y > 380) cItems.splice(i, 1);
-    });
-    cCtx.fillStyle = '#100515'; cCtx.fillRect(0, 0, 360, 380);
-    cCtx.fillStyle = '#ff0055'; cCtx.fillRect(cPaddleX, 350, 60, 15);
-    cCtx.fillStyle = '#ffcc00'; cItems.forEach(it => { cCtx.beginPath(); cCtx.arc(it.x, it.y, 8, 0, Math.PI*2); cCtx.fill(); });
-}
-
-// KEYBOARD CONTROLS
-window.addEventListener('keydown', e => {
-    if (e.code === 'Space') {
-        if (!document.getElementById('flappy-modal').classList.contains('hidden')) fBird.vy = -6.5;
-    }
-    if (e.key === 'a' || e.key === 'ArrowLeft') { dPlayerX = Math.max(0, dPlayerX - 18); cPaddleX = Math.max(0, cPaddleX - 18); }
-    if (e.key === 'd' || e.key === 'ArrowRight') { dPlayerX = Math.min(320, dPlayerX + 18); cPaddleX = Math.min(300, cPaddleX + 18); }
-    if (e.key >= '1' && e.key <= '9') selectSlot(parseInt(e.key) - 1);
-    if (e.key.toLowerCase() === 'e') checkInteraction();
-});
-
-// ==========================================
-// 6. DETAILED CANVAS GRAPHICS & WORLD RENDER
-// ==========================================
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-window.addEventListener('resize', resize); resize();
-
-const player = { x: 600, y: 500, w: 80, h: 80, speed: 7.5 };
-
-// WORLD OBJECTS (INCLUDES CURSED MACHINE WITH CODE CLUE)
-const worldObjects = [
-    { id: 'naomi', name: "Naomi's Counter", x: 600, y: 80, w: 360, h: 140 },
-    { id: 'flappy', name: "FLAPPY BIRD", x: 100, y: 260, w: 160, h: 240, color: '#ffca28' },
-    { id: 'dodge', name: "CYBER DODGE", x: 300, y: 260, w: 160, h: 240, color: '#00d2ff' },
-    { id: 'catch', name: "NEON CATCH", x: 500, y: 260, w: 160, h: 240, color: '#ff0055' },
-
-    // NORMAL GAMES
-    { id: 'm1', name: "Cyber Racer", x: 100, y: 560, w: 160, h: 240, color: '#2196f3', cost: 100, win: 50 },
-    { id: 'm2', name: "Neon Fighter", x: 300, y: 560, w: 160, h: 240, color: '#e91e63', cost: 100, win: 75 },
-    { id: 'm3', name: "Galaxy Blaster", x: 500, y: 560, w: 160, h: 240, color: '#9c27b0', cost: 100, win: 60 },
-    { id: 'm4', name: "Speed Demon", x: 700, y: 560, w: 160, h: 240, color: '#ff9800', cost: 100, win: 80 },
-    { id: 'm5', name: "Zombie Strike", x: 900, y: 560, w: 160, h: 240, color: '#4caf50', cost: 120, win: 100 },
-
-    // CURSED MACHINE (HINT FOR THE PASSWORD) & TERMINAL
-    { id: 'cursed', name: "Cursed Machine", x: 700, y: 260, w: 160, h: 240, color: '#ff0000' },
-    { id: 'terminal', name: "Secret Terminal", x: 1200, y: 100, w: 140, h: 140 }
-];
-
-const keys = {};
-window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
-window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-
-function checkDistanceToNaomi() {
-    return Math.hypot((player.x + 40) - (600 + 180), (player.y + 40) - (80 + 70));
-}
-
-function checkInteraction() {
-    // Check if player used an item from hotbar first
-    if (useSelectedItem()) return;
-
-    // Check interaction with nearby world objects
-    let near = null;
-    worldObjects.forEach(obj => {
-        const dist = Math.hypot((obj.x + obj.w/2) - (player.x + player.w/2), (obj.y + obj.h/2) - (player.y + player.h/2));
-        if (dist < 180) near = obj;
-    });
-
-    // Check placed bed interaction
-    if (playerStats.placedBed) {
-        const bed = playerStats.placedBed;
-        const distBed = Math.hypot((bed.x + bed.w/2) - (player.x + player.w/2), (bed.y + bed.h/2) - (player.y + player.h/2));
-        if (distBed < 180) {
-            playerStats.sleep();
-            return;
+        renderChoices([
+          { text: "Keep playing games", action: sceneArcadeFloor },
+          { text: "Go somewhere else", action: sceneStart }
+        ]);
+      }
+    },
+    {
+      text: "Play Flappy Bird Arcade (Costs 100 Tokens, Wins 500 Credits)",
+      action: () => {
+        if (state.tokens >= 100) {
+          state.tokens -= 100;
+          state.credits += 500;
+          updateUI();
+          renderText("High stakes pay off! You hit the jackpot for 500 credits!");
+        } else {
+          renderText("You don't have enough tokens left today!");
         }
+        renderChoices([
+          { text: "Keep playing games", action: sceneArcadeFloor },
+          { text: "Go somewhere else", action: sceneStart }
+        ]);
+      }
     }
+  ];
 
-    if (!near) return;
-    if (near.id === 'naomi') document.getElementById('shop-modal').classList.remove('hidden');
-    else if (near.id === 'flappy') startFlappy();
-    else if (near.id === 'dodge') startDodge();
-    else if (near.id === 'catch') startCatch();
-    else if (near.id === 'cursed') document.getElementById('cursed-modal').classList.remove('hidden');
-    else if (near.id.startsWith('m')) playMachine(near.name, near.cost, near.win);
-    else if (near.id === 'terminal') document.getElementById('terminal-modal').classList.remove('hidden');
-}
-
-// GRAPHICS RENDER FUNCTIONS
-function drawArcadeCabinet(obj) {
-    ctx.fillStyle = '#15151e';
-    ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
-    ctx.strokeStyle = obj.color;
-    ctx.lineWidth = 6;
-    ctx.strokeRect(obj.x, obj.y, obj.w, obj.h);
-
-    // Marquee Header
-    ctx.fillStyle = obj.color;
-    ctx.fillRect(obj.x + 10, obj.y + 10, obj.w - 20, 36);
-    ctx.fillStyle = '#000';
-    ctx.font = 'bold 14px Courier New';
-    ctx.textAlign = 'center';
-    ctx.fillText(obj.id === 'cursed' ? "ERROR 666" : "ARCADE", obj.x + obj.w/2, obj.y + 32);
-
-    // Screen
-    ctx.fillStyle = obj.id === 'cursed' ? '#330000' : '#0a0a12';
-    ctx.fillRect(obj.x + 15, obj.y + 55, obj.w - 30, 85);
-    ctx.fillStyle = obj.color;
-    ctx.globalAlpha = 0.35;
-    ctx.fillRect(obj.x + 20, obj.y + 60, obj.w - 40, 75);
-    ctx.globalAlpha = 1.0;
-
-    // Control Deck
-    ctx.fillStyle = '#222';
-    ctx.fillRect(obj.x + 10, obj.y + 155, obj.w - 20, 45);
-    ctx.fillStyle = '#ff0000';
-    ctx.beginPath();
-    ctx.arc(obj.x + 35, obj.y + 178, 9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffff00';
-    ctx.beginPath();
-    ctx.arc(obj.x + 85, obj.y + 178, 8, 0, Math.PI * 2);
-    ctx.arc(obj.x + 115, obj.y + 178, 8, 0, Math.PI * 2);
-    ctx.fill();
-}
-
-function drawNaomiCounter(obj) {
-    // Counter Base
-    ctx.fillStyle = '#5c3a21';
-    ctx.fillRect(obj.x, obj.y + 40, obj.w, obj.h - 40);
-    ctx.fillStyle = '#8b5a2b';
-    ctx.fillRect(obj.x - 12, obj.y + 25, obj.w + 24, 25);
-
-    // Naomi Character Body
-    ctx.fillStyle = '#e91e63';
-    ctx.beginPath();
-    ctx.arc(obj.x + obj.w/2, obj.y - 10, 36, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffdbac';
-    ctx.beginPath();
-    ctx.arc(obj.x + obj.w/2, obj.y - 4, 26, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#ffcc00';
-    ctx.font = 'bold 18px Courier New';
-    ctx.textAlign = 'center';
-    ctx.fillText("NAOMI'S SHOP", obj.x + obj.w/2, obj.y + 85);
-}
-
-function drawTerminal(obj) {
-    ctx.fillStyle = '#222';
-    ctx.fillRect(obj.x, obj.y + 50, obj.w, obj.h - 50);
-    ctx.fillStyle = '#002200';
-    ctx.fillRect(obj.x + 12, obj.y, obj.w - 24, 60);
-    ctx.strokeStyle = '#00ff00';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(obj.x + 12, obj.y, obj.w - 24, 60);
-    ctx.fillStyle = '#00ff00';
-    ctx.font = 'bold 14px Courier New';
-    ctx.textAlign = 'center';
-    ctx.fillText(">_PASS", obj.x + obj.w/2, obj.y + 36);
-}
-
-function drawPlacedBed(bed) {
-    ctx.fillStyle = '#4a2e18';
-    ctx.fillRect(bed.x, bed.y, bed.w, bed.h);
-    ctx.fillStyle = '#2196f3';
-    ctx.fillRect(bed.x + 10, bed.y + 25, bed.w - 20, bed.h - 35);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(bed.x + 15, bed.y + 8, bed.w - 30, 20);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 14px Courier New';
-    ctx.textAlign = 'center';
-    ctx.fillText("REST BED (Press E)", bed.x + bed.w / 2, bed.y - 10);
-}
-
-function drawPlayerSprite() {
-    const px = player.x;
-    const py = player.y;
-
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.beginPath();
-    ctx.ellipse(px + 40, py + 72, 32, 12, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Body
-    ctx.fillStyle = '#00ffcc';
-    ctx.fillRect(px + 18, py + 30, 44, 34);
-
-    // Legs
-    ctx.fillStyle = '#111122';
-    ctx.fillRect(px + 22, py + 64, 14, 16);
-    ctx.fillRect(px + 44, py + 64, 14, 16);
-
-    // Head
-    ctx.fillStyle = '#ffdbac';
-    ctx.fillRect(px + 22, py + 8, 36, 26);
-
-    // Hair
-    ctx.fillStyle = '#3e2723';
-    ctx.fillRect(px + 18, py + 2, 44, 12);
-
-    // Eyes
-    ctx.fillStyle = '#000';
-    ctx.fillRect(px + 28, py + 18, 5, 6);
-    ctx.fillRect(px + 46, py + 18, 5, 6);
-}
-
-function drawWorld() {
-    ctx.fillStyle = '#0a0a10';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Grid Floor Pattern
-    ctx.strokeStyle = '#181826';
-    ctx.lineWidth = 2;
-    for (let x = 0; x < canvas.width; x += 80) {
-        for (let y = 0; y < canvas.height; y += 80) {
-            ctx.strokeRect(x, y, 80, 80);
-        }
-    }
-
-    worldObjects.forEach(obj => {
-        if (obj.id === 'naomi') drawNaomiCounter(obj);
-        else if (obj.id === 'terminal') drawTerminal(obj);
-        else drawArcadeCabinet(obj);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 14px Courier New';
-        ctx.textAlign = 'center';
-        ctx.fillText(obj.name, obj.x + obj.w / 2, obj.y - 12);
+  if (state.day >= 60 && !state.discoveredFFB) {
+    choices.push({
+      text: "Inspect high score boards closely...",
+      action: sceneDiscoverFFB
     });
+  }
 
-    if (playerStats.placedBed) {
-        drawPlacedBed(playerStats.placedBed);
-    }
-
-    drawPlayerSprite();
+  choices.push({ text: "Back to main area", action: sceneStart });
+  renderChoices(choices);
 }
 
-function gameLoop() {
-    if (!playerStats.isDead) {
-        if (keys['w'] || keys['arrowup']) player.y = Math.max(20, player.y - player.speed);
-        if (keys['s'] || keys['arrowdown']) player.y = Math.min(canvas.height - player.h - 20, player.y + player.speed);
-        if (keys['a'] || keys['arrowleft']) player.x = Math.max(20, player.x - player.speed);
-        if (keys['d'] || keys['arrowright']) player.x = Math.min(canvas.width - player.w - 20, player.x + player.speed);
-    }
-    drawWorld();
-    requestAnimationFrame(gameLoop);
+// Scene 3: Credit Counter
+function sceneCounter() {
+  renderText(
+    "N40M1 stands behind the counter with a metallic, mechanical smile. 'Greetings! Exchange your earned credits for survival supplies here.'"
+  );
+
+  renderChoices([
+    {
+      text: "Buy Full-Course Steak Meal (200 Credits)",
+      action: () => {
+        if (state.credits >= 200) {
+          state.credits -= 200;
+          updateUI();
+          renderText("N40M1 hands you a delicious steak dinner. Perfect energy for surviving!");
+        } else {
+          renderText("N40M1 shakes her head. 'Insufficient credits.'");
+        }
+        renderChoices([{ text: "Back", action: sceneCounter }]);
+      }
+    },
+    {
+      text: "Buy Comfortable Bed Setup (1,000 Credits)",
+      action: () => {
+        if (state.credits >= 1000) {
+          state.credits -= 1000;
+          state.hasBed = true;
+          updateUI();
+          renderText("You bought a mattress and bedding! Sleep quality improved significantly.");
+        } else {
+          renderText("N40M1 shakes her head. 'Insufficient credits.'");
+        }
+        renderChoices([{ text: "Back", action: sceneCounter }]);
+      }
+    },
+    {
+      text: "Advance to the next day / Rest",
+      action: () => {
+        state.day += 30; // Jump days forward for story progression
+        state.tokens = 1000;
+        updateUI();
+        if (state.day < 60) {
+          renderText("Days roll by seamlessly. You eat, sleep, play games, and hoard credits.");
+          renderChoices([{ text: "Continue", action: sceneStart }]);
+        } else if (state.day >= 60 && !state.discoveredFFB) {
+          renderText("A couple of months have passed. Your living situation is comfortable, but you notice something strange on the game scoreboards...");
+          renderChoices([{ text: "Investigate scoreboards", action: sceneDiscoverFFB }]);
+        } else {
+          renderText(`Day ${state.day}: You rest up and receive your daily 1,000 token refresh.`);
+          renderChoices([{ text: "Continue", action: sceneStart }]);
+        }
+      }
+    },
+    { text: "Leave counter", action: sceneStart }
+  ]);
 }
 
-playerStats.updateUI();
-requestAnimationFrame(gameLoop);
+// Scene 4: Mysterious Arcade Cabinet
+function sceneSecretCabinet() {
+  if (!state.unlockedCabinet) {
+    renderText(
+      "In a dark corner sits an unbranded, mysterious black arcade cabinet. It doesn't take regular tokens—it requires **1,000 tokens** for a single play."
+    );
+
+    let choices = [];
+    if (state.discoveredFFB) {
+      choices.push({ text: "Type in 14-digit password on the coin screen", action: sceneSolvePuzzle });
+    }
+    choices.push({ text: "Walk away for now", action: sceneStart });
+
+    renderChoices(choices);
+  } else {
+    sceneArcadeTerminal();
+  }
+}
+
+// Scene 5: Discovering FFB Binary Code
+function sceneDiscoverFFB() {
+  state.discoveredFFB = true;
+  renderText(
+    "You check games like Dig Dug, OutRun 2, NBA Hoops, and Time Crisis. A 3-letter initial keeps taking spot #2: **FFB**. The scores are weird binary numbers: 1, 10, 110, 1000, 1010...\n\nRepresenting numbers 1 through 14, taking the first letter of each game in numerical order spells out a message: **DONTTRUSTNAOMI**."
+  );
+
+  renderChoices([
+    { text: "Head straight to the 1,000-Token Mysterious Machine", action: sceneSecretCabinet }
+  ]);
+}
+
+// Scene 6: Unlocking the Terminal
+function sceneSolvePuzzle() {
+  state.unlockedCabinet = true;
+  renderText(
+    "You insert 1,000 tokens and enter **DONTTRUSTNAOMI** (14 digits).\n\nThe screen turns pitch black. Red text flashes:\n\n*'I have to be quick. Well done figuring out the riddle. You think you've been here a couple of months... but you've already been trapped here for OVER 10 YEARS due to N40M1's time dilation. Every machine here houses the trapped soul of someone who attempted this challenge. You will become one too unless you beat N40M1 at every game.'*"
+  );
+
+  renderChoices([
+    { text: "Ask the screen: 'Who are you?'", action: sceneFFBIdentity }
+  ]);
+}
+
+// Scene 7: FFB's Identity & The Objective
+function sceneFFBIdentity() {
+  renderText(
+    "The screen replies: *'I am FFB — Freddy Fazbear. To break the curse, you must challenge N40M1. Beat her in the arcade games. If you lose more than 100 games, she gets your soul forever. Win, and everyone is freed.'*"
+  );
+
+  renderChoices([
+    { text: "Gain Special Ability: Slow Down Time to 10% Speed", action: () => {
+        state.timeDilationAbility = true;
+        updateUI();
+        scenePrepareForBoss();
+      } 
+    }
+  ]);
+}
+
+// Scene 8: Final Battle Setup
+function scenePrepareForBoss() {
+  renderText(
+    "Equipped with the ability to slow down time to 10% speed, you walk up to N40M1. 'We challenge you, N40M1! Robber of destiny, unmaker of life, to beat us at these games!'"
+  );
+
+  renderChoices([
+    { text: "Begin the Ultimate Arcade Showdown against N40M1!", action: sceneBossBattle }
+  ]);
+}
+
+// Scene 9: Boss Battle Mechanics
+function sceneBossBattle() {
+  state.naomiChallenged = true;
+  renderText(
+    `N40M1 smiles sinisterly: 'Very well! But lose 100 games, and your soul is mine.'\n\n**Battle Progress:**\nGames Won: ${state.gamesWonAgainstNaomi} / 900\nGames Lost: ${state.gamesLostToNaomi} / 100`
+  );
+
+  renderChoices([
+    {
+      text: "Use Time Dilation (10% Speed) to Play Arcade Matches",
+      action: () => {
+        // High win probability with time dilation active
+        state.gamesWonAgainstNaomi += 300;
+        state.gamesLostToNaomi += 10;
+        
+        if (state.gamesWonAgainstNaomi >= 900) {
+          sceneVictory();
+        } else {
+          sceneBossBattle();
+        }
+      }
+    }
+  ]);
+}
+
+// Scene 10: Climax & Ending
+function sceneVictory() {
+  renderText(
+    "With time slowed down, your precision is absolute. You dominate every single arcade cabinet!\n\nN40M1 shrieks as sparks fly—**SHE EXPLODES!**\n\nAcross the arcade, the glowing machines transform back into thousands of human beings. Off in the distance, **Freddy Fazbear (FFB)** blows you a kiss and waves goodbye as everyone vanishes home.\n\nThe boarded doors burst open. Reverting N40M1's curse fixes the time dilation—exactly 1 real year has passed. You walk out into the sunlight and collect your **$1 Billion**!"
+  );
+
+  renderChoices([
+    { text: "Play Again from Day 1", action: () => location.reload() }
+  ]);
+}
+
+// Launch Game on Load
+sceneStart();
