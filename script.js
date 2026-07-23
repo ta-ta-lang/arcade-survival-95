@@ -20,7 +20,7 @@ const playerStats = {
 
     sleep() {
         if (!this.hasBedPlaced) {
-            showNotification("You need to buy and place a bed first!");
+            showNotification("Buy and place a bed first!");
             return;
         }
         this.energy = this.maxEnergy;
@@ -169,7 +169,7 @@ function playMachine(machineId, tokenCost, rewardCredits) {
     playerStats.credits += rewardCredits;
 
     playerStats.updateUI();
-    showNotification(`Played Arcade Machine! Won +${rewardCredits} Credits!`);
+    showNotification(`Played ${machineId}! Won +${rewardCredits} Credits!`);
 }
 
 function resetMachinePlayLimits() {
@@ -190,7 +190,116 @@ function enterSecretTerminalPassword(inputPassword) {
 }
 
 // ==========================================
-// 4. FULLSCREEN CANVAS & RETRO SPRITE DRAWING
+// 4. PLAYABLE FLAPPY BIRD MINIGAME ENGINE
+// ==========================================
+const flappyCanvas = document.getElementById('flappyCanvas');
+const fCtx = flappyCanvas.getContext('2d');
+
+let flappyBird = { x: 50, y: 150, vy: 0, gravity: 0.35, jump: -6.5, radius: 10 };
+let pipes = [];
+let flappyScore = 0;
+let flappyInterval = null;
+let flappyActive = false;
+
+function startFlappyGame() {
+    if (playerStats.dailyTokens < 50) {
+        showNotification("Requires 50 Daily Tokens to play Flappy Bird!");
+        return;
+    }
+    playerStats.dailyTokens -= 50;
+    playerStats.updateUI();
+
+    document.getElementById('flappy-modal').classList.remove('hidden');
+    flappyBird.y = 150;
+    flappyBird.vy = 0;
+    pipes = [];
+    flappyScore = 0;
+    flappyActive = true;
+
+    if (flappyInterval) clearInterval(flappyInterval);
+    flappyInterval = setInterval(updateFlappyGame, 1000 / 60);
+}
+
+function closeFlappyModal() {
+    flappyActive = false;
+    if (flappyInterval) clearInterval(flappyInterval);
+    document.getElementById('flappy-modal').classList.add('hidden');
+}
+
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && flappyActive) {
+        flappyBird.vy = flappyBird.jump;
+        e.preventDefault();
+    }
+});
+
+function updateFlappyGame() {
+    flappyBird.vy += flappyBird.gravity;
+    flappyBird.y += flappyBird.vy;
+
+    // Spawn Pipes
+    if (pipes.length === 0 || pipes[pipes.length - 1].x < 180) {
+        const gap = 110;
+        const topH = Math.floor(Math.random() * (flappyCanvas.height - gap - 80)) + 30;
+        pipes.push({ x: flappyCanvas.width, top: topH, bottom: topH + gap, passed: false });
+    }
+
+    // Move Pipes
+    pipes.forEach(p => p.x -= 2);
+
+    // Check Collisions & Score
+    pipes.forEach(p => {
+        if (!p.passed && p.x < flappyBird.x) {
+            p.passed = true;
+            flappyScore++;
+            playerStats.credits += 10; // Earn 10 Credits per pipe
+            playerStats.updateUI();
+        }
+
+        if (flappyBird.x + flappyBird.radius > p.x && flappyBird.x - flappyBird.radius < p.x + 40) {
+            if (flappyBird.y - flappyBird.radius < p.top || flappyBird.y + flappyBird.radius > p.bottom) {
+                gameOverFlappy();
+            }
+        }
+    });
+
+    if (flappyBird.y > flappyCanvas.height || flappyBird.y < 0) gameOverFlappy();
+
+    // Render Flappy
+    fCtx.fillStyle = '#70c5ce';
+    fCtx.fillRect(0, 0, flappyCanvas.width, flappyCanvas.height);
+
+    // Draw Pipes
+    ctxFillPipes();
+
+    // Draw Bird
+    fCtx.fillStyle = '#ffca28';
+    fCtx.beginPath();
+    fCtx.arc(flappyBird.x, flappyBird.y, flappyBird.radius, 0, Math.PI * 2);
+    fCtx.fill();
+
+    // Draw Score
+    fCtx.fillStyle = '#fff';
+    fCtx.font = 'bold 16px Courier New';
+    fCtx.fillText(`Score: ${flappyScore} (+$${flappyScore * 10})`, 10, 25);
+}
+
+function ctxFillPipes() {
+    pipes.forEach(p => {
+        fCtx.fillStyle = '#2e7d32';
+        fCtx.fillRect(p.x, 0, 40, p.top);
+        fCtx.fillRect(p.x, p.bottom, 40, flappyCanvas.height - p.bottom);
+    });
+}
+
+function gameOverFlappy() {
+    flappyActive = false;
+    clearInterval(flappyInterval);
+    showNotification(`Game Over! Earned +$${flappyScore * 10} Credits!`);
+}
+
+// ==========================================
+// 5. FULLSCREEN CANVAS & SCALED SPRITES
 // ==========================================
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -202,14 +311,19 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-const player = { x: 300, y: 300, width: 32, height: 32, speed: 4.5 };
+// SCALED UP PLAYER (64x64)
+const player = { x: 400, y: 400, width: 50, height: 50, speed: 6.0 };
 
+// SCALED UP WORLD OBJECTS
 const worldObjects = [
-    { id: 'naomi', name: "Naomi's Counter", x: 400, y: 100, w: 140, h: 60 },
-    { id: 'machine1', name: "Cyber Racer", x: 120, y: 220, w: 60, h: 90, color: '#00d2ff', cost: 100, win: 50 },
-    { id: 'machine2', name: "Neon Fighter", x: 220, y: 220, w: 60, h: 90, color: '#ff0055', cost: 100, win: 75 },
-    { id: 'terminal', name: "Hacker Terminal", x: 750, y: 120, w: 60, h: 70 },
-    { id: 'bed', name: "Rest Bed", x: 800, y: 450, w: 90, h: 70 }
+    { id: 'naomi', name: "Naomi's Counter", x: 500, y: 80, w: 220, h: 90 },
+    { id: 'flappy', name: "FLAPPY BIRD", x: 120, y: 220, w: 100, h: 140, color: '#ffca28' },
+    { id: 'machine1', name: "Cyber Racer", x: 260, y: 220, w: 100, h: 140, color: '#00d2ff', cost: 100, win: 50 },
+    { id: 'machine2', name: "Neon Fighter", x: 400, y: 220, w: 100, h: 140, color: '#ff0055', cost: 100, win: 75 },
+    { id: 'machine3', name: "Retro Space", x: 120, y: 420, w: 100, h: 140, color: '#9c27b0', cost: 100, win: 60 },
+    { id: 'machine4', name: "Pinball King", x: 260, y: 420, w: 100, h: 140, color: '#4caf50', cost: 100, win: 80 },
+    { id: 'terminal', name: "Hacker Terminal", x: 950, y: 100, w: 90, h: 100 },
+    { id: 'bed', name: "Rest Bed", x: 1000, y: 500, w: 140, h: 100 }
 ];
 
 const keys = {};
@@ -217,6 +331,8 @@ window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; })
 window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
 function updateMovement() {
+    if (flappyActive) return; // Freeze movement while playing Flappy Bird
+
     if (keys['w'] || keys['arrowup']) player.y = Math.max(20, player.y - player.speed);
     if (keys['s'] || keys['arrowdown']) player.y = Math.min(canvas.height - player.height - 20, player.y + player.speed);
     if (keys['a'] || keys['arrowleft']) player.x = Math.max(20, player.x - player.speed);
@@ -224,8 +340,10 @@ function updateMovement() {
 }
 
 function checkWorldInteraction() {
+    if (flappyActive) return;
+
     let nearestObj = null;
-    let minDist = 80;
+    let minDist = 120;
 
     worldObjects.forEach(obj => {
         const cx = obj.x + obj.w / 2;
@@ -244,7 +362,9 @@ function checkWorldInteraction() {
 
     if (nearestObj.id === 'naomi') {
         document.getElementById('shop-modal').classList.remove('hidden');
-    } else if (nearestObj.id === 'machine1' || nearestObj.id === 'machine2') {
+    } else if (nearestObj.id === 'flappy') {
+        startFlappyGame();
+    } else if (nearestObj.id.startsWith('machine')) {
         playMachine(nearestObj.name, nearestObj.cost, nearestObj.win);
     } else if (nearestObj.id === 'terminal') {
         document.getElementById('terminal-modal').classList.remove('hidden');
@@ -253,113 +373,91 @@ function checkWorldInteraction() {
     }
 }
 
-// --- DETAILED CUSTOM CANVAS DRAWING FUNCTIONS ---
+// --- LARGE PIXEL DRAWING FUNCTIONS ---
 
 function drawArcadeCabinet(obj) {
-    // Cabinet Body
     ctx.fillStyle = '#15151e';
     ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
     ctx.strokeStyle = obj.color;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4;
     ctx.strokeRect(obj.x, obj.y, obj.w, obj.h);
 
-    // Glowing Marquee Title Top
+    // Marquee
     ctx.fillStyle = obj.color;
-    ctx.fillRect(obj.x + 5, obj.y + 5, obj.w - 10, 16);
+    ctx.fillRect(obj.x + 8, obj.y + 8, obj.w - 16, 24);
     ctx.fillStyle = '#000';
-    ctx.font = 'bold 9px Courier New';
+    ctx.font = 'bold 12px Courier New';
     ctx.textAlign = 'center';
-    ctx.fillText("ARCADE", obj.x + obj.w/2, obj.y + 16);
+    ctx.fillText("ARCADE", obj.x + obj.w/2, obj.y + 24);
 
-    // CRT Screen
+    // Screen
     ctx.fillStyle = '#0a0a12';
-    ctx.fillRect(obj.x + 8, obj.y + 26, obj.w - 16, 30);
+    ctx.fillRect(obj.x + 12, obj.y + 40, obj.w - 24, 45);
     ctx.fillStyle = obj.color;
-    ctx.globalAlpha = 0.6;
-    ctx.fillRect(obj.x + 12, obj.y + 30, obj.w - 24, 22); // Screen glow
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(obj.x + 16, obj.y + 44, obj.w - 32, 37);
     ctx.globalAlpha = 1.0;
 
-    // Control Panel & Joystick
+    // Controls
     ctx.fillStyle = '#222';
-    ctx.fillRect(obj.x + 5, obj.y + 60, obj.w - 10, 15);
-    // Joystick
+    ctx.fillRect(obj.x + 8, obj.y + 92, obj.w - 16, 22);
     ctx.fillStyle = '#ff0000';
     ctx.beginPath();
-    ctx.arc(obj.x + 20, obj.y + 66, 4, 0, Math.PI * 2);
+    ctx.arc(obj.x + 30, obj.y + 103, 6, 0, Math.PI * 2);
     ctx.fill();
-    // Buttons
     ctx.fillStyle = '#ffff00';
     ctx.beginPath();
-    ctx.arc(obj.x + 38, obj.y + 66, 3, 0, Math.PI * 2);
-    ctx.arc(obj.x + 46, obj.y + 66, 3, 0, Math.PI * 2);
+    ctx.arc(obj.x + 60, obj.y + 103, 5, 0, Math.PI * 2);
+    ctx.arc(obj.x + 75, obj.y + 103, 5, 0, Math.PI * 2);
     ctx.fill();
-
-    // Coin Door
-    ctx.fillStyle = '#333';
-    ctx.fillRect(obj.x + 18, obj.y + 78, obj.w - 36, 8);
 }
 
 function drawNaomiCounter(obj) {
-    // Wooden Counter
     ctx.fillStyle = '#5c3a21';
-    ctx.fillRect(obj.x, obj.y + 20, obj.w, obj.h - 20);
+    ctx.fillRect(obj.x, obj.y + 30, obj.w, obj.h - 30);
     ctx.fillStyle = '#8b5a2b';
-    ctx.fillRect(obj.x - 5, obj.y + 15, obj.w + 10, 10); // Countertop desk
+    ctx.fillRect(obj.x - 8, obj.y + 20, obj.w + 16, 15);
 
-    // Naomi Character behind counter
-    // Hair
+    // Naomi Sprite
     ctx.fillStyle = '#e91e63';
     ctx.beginPath();
-    ctx.arc(obj.x + obj.w/2, obj.y + 2, 14, 0, Math.PI * 2);
+    ctx.arc(obj.x + obj.w/2, obj.y, 22, 0, Math.PI * 2);
     ctx.fill();
-    // Head
     ctx.fillStyle = '#ffdbac';
     ctx.beginPath();
-    ctx.arc(obj.x + obj.w/2, obj.y + 5, 10, 0, Math.PI * 2);
+    ctx.arc(obj.x + obj.w/2, obj.y + 4, 16, 0, Math.PI * 2);
     ctx.fill();
-    // Eyes
-    ctx.fillStyle = '#000';
-    ctx.fillRect(obj.x + obj.w/2 - 4, obj.y + 4, 2, 3);
-    ctx.fillRect(obj.x + obj.w/2 + 2, obj.y + 4, 2, 3);
 
-    // Sign on counter
     ctx.fillStyle = '#ffcc00';
-    ctx.font = 'bold 11px Courier New';
+    ctx.font = 'bold 14px Courier New';
     ctx.textAlign = 'center';
-    ctx.fillText("NAOMI'S SHOP", obj.x + obj.w/2, obj.y + 42);
+    ctx.fillText("NAOMI'S SHOP", obj.x + obj.w/2, obj.y + 60);
 }
 
 function drawTerminal(obj) {
-    // Desk
     ctx.fillStyle = '#222';
-    ctx.fillRect(obj.x, obj.y + 30, obj.w, obj.h - 30);
+    ctx.fillRect(obj.x, obj.y + 40, obj.w, obj.h - 40);
 
-    // Glowing Green Hacker Monitor
     ctx.fillStyle = '#002200';
-    ctx.fillRect(obj.x + 10, obj.y, obj.w - 20, 32);
+    ctx.fillRect(obj.x + 10, obj.y, obj.w - 20, 45);
     ctx.strokeStyle = '#00ff00';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(obj.x + 10, obj.y, obj.w - 20, 32);
+    ctx.lineWidth = 3;
+    ctx.strokeRect(obj.x + 10, obj.y, obj.w - 20, 45);
 
-    // Matrix lines on screen
     ctx.fillStyle = '#00ff00';
-    ctx.font = '8px Courier New';
+    ctx.font = 'bold 11px Courier New';
     ctx.textAlign = 'center';
-    ctx.fillText(">_PASS", obj.x + obj.w/2, obj.y + 18);
+    ctx.fillText(">_PASS", obj.x + obj.w/2, obj.y + 26);
 }
 
 function drawBed(obj) {
     if (!playerStats.hasBedPlaced) return;
-
-    // Wood frame
     ctx.fillStyle = '#4a2e18';
     ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
-    // Mattress / Blanket
     ctx.fillStyle = '#2196f3';
-    ctx.fillRect(obj.x + 4, obj.y + 15, obj.w - 8, obj.h - 19);
-    // Pillow
+    ctx.fillRect(obj.x + 6, obj.y + 20, obj.w - 12, obj.h - 26);
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(obj.x + 8, obj.y + 4, obj.w - 16, 12);
+    ctx.fillRect(obj.x + 12, obj.y + 6, obj.w - 24, 18);
 }
 
 function drawPlayerSprite() {
@@ -369,65 +467,61 @@ function drawPlayerSprite() {
     // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.beginPath();
-    ctx.ellipse(px + 16, py + 30, 12, 5, 0, 0, Math.PI * 2);
+    ctx.ellipse(px + 25, py + 46, 20, 8, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Body / Hoodie
+    // Body
     ctx.fillStyle = '#00ffcc';
-    ctx.fillRect(px + 8, py + 14, 16, 14);
+    ctx.fillRect(px + 12, py + 20, 26, 22);
 
-    // Pants
+    // Legs
     ctx.fillStyle = '#111122';
-    ctx.fillRect(px + 9, py + 26, 6, 6);
-    ctx.fillRect(px + 17, py + 26, 6, 6);
+    ctx.fillRect(px + 14, py + 40, 9, 10);
+    ctx.fillRect(px + 27, py + 40, 9, 10);
 
     // Head
     ctx.fillStyle = '#ffdbac';
-    ctx.fillRect(px + 10, py + 4, 12, 10);
+    ctx.fillRect(px + 15, py + 6, 20, 16);
 
     // Hair
     ctx.fillStyle = '#3e2723';
-    ctx.fillRect(px + 9, py + 1, 14, 5);
+    ctx.fillRect(px + 13, py + 2, 24, 8);
 
     // Eyes
     ctx.fillStyle = '#000';
-    ctx.fillRect(px + 12, py + 8, 2, 2);
-    ctx.fillRect(px + 18, py + 8, 2, 2);
+    ctx.fillRect(px + 18, py + 12, 3, 4);
+    ctx.fillRect(px + 28, py + 12, 3, 4);
 }
 
 function renderWorld() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Retro Carpet Tile Pattern Background
     ctx.fillStyle = '#0d0d14';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     ctx.strokeStyle = '#181826';
     ctx.lineWidth = 1;
-    const tileSize = 50;
+    const tileSize = 60;
     for (let x = 0; x < canvas.width; x += tileSize) {
         for (let y = 0; y < canvas.height; y += tileSize) {
             ctx.strokeRect(x, y, tileSize, tileSize);
         }
     }
 
-    // Render All World Objects
     worldObjects.forEach(obj => {
-        if (obj.id === 'machine1' || obj.id === 'machine2') drawArcadeCabinet(obj);
+        if (obj.id.startsWith('machine') || obj.id === 'flappy') drawArcadeCabinet(obj);
         else if (obj.id === 'naomi') drawNaomiCounter(obj);
         else if (obj.id === 'terminal') drawTerminal(obj);
         else if (obj.id === 'bed') drawBed(obj);
 
-        // Object Label Tags
         if (obj.id !== 'bed' || playerStats.hasBedPlaced) {
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 10px Courier New';
+            ctx.font = 'bold 12px Courier New';
             ctx.textAlign = 'center';
-            ctx.fillText(obj.name, obj.x + obj.w / 2, obj.y - 8);
+            ctx.fillText(obj.name, obj.x + obj.w / 2, obj.y - 10);
         }
     });
 
-    // Render Character
     drawPlayerSprite();
 }
 
@@ -437,6 +531,6 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
-// Start Game Loop
+// Start Loop
 playerStats.updateUI();
 requestAnimationFrame(gameLoop);
