@@ -1,6 +1,3 @@
-/* ==========================================
-   1. BASE PAGE & LAYOUT STYLES
-   ========================================== */
 * {
     box-sizing: border-box;
     margin: 0;
@@ -9,179 +6,118 @@
 }
 
 body {
-    background-color: #121212;
+    background-color: #0d0d0d;
     color: #ffffff;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
     min-height: 100vh;
-    padding: 20px;
-    padding-bottom: 100px; /* Space so hotbar doesn't cover content */
+    padding: 10px;
+    padding-bottom: 120px;
     overflow-x: hidden;
 }
 
-/* ==========================================
-   2. PLAYER STATS & SURVIVAL BARS
-   ========================================== */
-.stats-container {
+/* 1. STATS OVERLAY AT TOP */
+.stats-overlay {
     width: 100%;
-    max-width: 400px;
-    background: #1e1e1e;
-    border: 2px solid #444;
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
-}
-
-.stats-container h2 {
-    font-size: 18px;
-    margin-bottom: 12px;
-    text-align: center;
-    color: #00ffcc;
-}
-
-.stat-box {
-    margin-bottom: 10px;
-}
-
-.stat-label {
-    font-size: 13px;
-    font-weight: bold;
-    margin-bottom: 4px;
-    display: block;
-}
-
-.bar-bg {
-    width: 100%;
-    height: 18px;
-    background-color: #333;
-    border-radius: 9px;
-    overflow: hidden;
-    border: 1px solid #555;
-}
-
-#hunger-bar {
-    height: 100%;
-    width: 100%;
-    background-color: #ff9800; /* Orange */
-    transition: width 0.3s ease;
-}
-
-#energy-bar {
-    height: 100%;
-    width: 100%;
-    background-color: #2196f3; /* Blue */
-    transition: width 0.3s ease;
-}
-
-#hygiene-bar {
-    height: 100%;
-    width: 100%;
-    background-color: #4caf50; /* Green */
-    transition: width 0.3s ease;
-}
-
-.currency-display {
+    max-width: 800px;
+    background: #1a1a1a;
+    border: 2px solid #333;
+    padding: 10px 16px;
+    border-radius: 8px 8px 0 0;
     display: flex;
     justify-content: space-between;
-    font-weight: bold;
-    margin-top: 12px;
-    font-size: 15px;
-    border-top: 1px dashed #444;
-    padding-top: 8px;
-}
-
-/* ==========================================
-   3. GENERAL BUTTONS & INPUT STYLES
-   ========================================== */
-button {
-    cursor: pointer;
-    border-radius: 4px;
-    transition: transform 0.1s ease, background-color 0.2s ease;
-}
-
-button:active {
-    transform: scale(0.95);
-}
-
-/* ==========================================
-   4. CENTER NOTIFICATION POPUP (CENTER OF SCREEN)
-   ========================================== */
-#center-notification {
-    position: fixed;
-    top: 40%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: rgba(0, 0, 0, 0.9);
-    color: #ffffff;
-    border: 2px solid #555;
-    padding: 15px 30px;
-    border-radius: 8px;
-    font-size: 20px;
-    font-weight: bold;
-    text-align: center;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.3s ease-in-out;
-    z-index: 9999;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.9);
-}
-
-#center-notification.show {
-    opacity: 1;
-}
-
-/* ==========================================
-   5. MINECRAFT 9-SLOT HOTBAR UI
-   ========================================== */
-.hotbar-container {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    background-color: #8b8b8b;
-    border: 4px solid #373737;
-    padding: 4px;
-    gap: 4px;
-    z-index: 1000;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.9);
-}
-
-.hotbar-slot {
-    width: 50px;
-    height: 50px;
-    background-color: #8b8b8b;
-    border: 3px inset #ffffff;
-    position: relative;
-    display: flex;
     align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    user-select: none;
+    gap: 15px;
 }
 
-/* Highlighted active slot (Keys 1-9) */
-.hotbar-slot.selected {
-    border: 4px solid #ffffff;
-    outline: 2px solid #000000;
-    background-color: #a0a0a0;
+.stat-box { flex: 1; }
+.stat-label { font-size: 11px; font-weight: bold; color: #aaa; display: block; margin-bottom: 2px; }
+.bar-bg { width: 100%; height: 14px; background-color: #2a2a2a; border-radius: 3px; overflow: hidden; border: 1px solid #444; }
+
+#hunger-bar { height: 100%; width: 100%; background-color: #ff9800; transition: width 0.3s ease; }
+#energy-bar { height: 100%; width: 100%; background-color: #2196f3; transition: width 0.3s ease; }
+#hygiene-bar { height: 100%; width: 100%; background-color: #4caf50; transition: width 0.3s ease; }
+
+.currency-display { display: flex; flex-direction: column; font-size: 13px; color: #ffcc00; text-align: right; min-width: 120px; }
+
+/* 2. CANVAS GAME VIEWPORT */
+.canvas-wrapper {
+    width: 100%;
+    max-width: 800px;
+    background: #000;
+    border: 2px solid #333;
+    border-top: none;
+    text-align: center;
 }
 
-.hotbar-slot .slot-num {
-    position: absolute;
-    top: 2px;
-    left: 4px;
-    font-size: 11px;
-    color: #ffffff;
-    font-weight: bold;
-    text-shadow: 1px 1px 0px #000000;
+#gameCanvas {
+    width: 100%;
+    height: auto;
+    display: block;
+    background-color: #181824;
 }
 
-.hotbar-slot .item-icon {
-    width: 32px;
-    height: 32px;
-    object-fit: contain;
+.controls-hint {
+    font-size: 12px;
+    color: #888;
+    padding: 8px;
+    background: #111;
 }
+
+/* 3. MODALS (SHOP & TERMINAL POPUPS) */
+.modal {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 2000;
+}
+.modal.hidden { display: none; }
+
+.modal-content {
+    background: #1e1e1e;
+    border: 2px solid #444;
+    padding: 20px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+}
+
+.button-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 15px 0; }
+.btn { padding: 10px; font-weight: bold; border-radius: 4px; border: 1px solid #444; background: #2a2a2a; color: #fff; cursor: pointer; }
+.btn-shop { border-color: #ff9800; color: #ffca28; }
+.btn-action { background: #333; width: 100%; }
+
+.terminal-card { border-color: #00ff00; }
+.terminal-input { width: 100%; background: #000; color: #00ff00; border: 1px solid #00ff00; padding: 8px; margin: 10px 0; text-align: center; }
+.btn-terminal { background: #00ff00; color: #000; border: none; width: 100%; }
+
+/* 4. CENTER NOTIFICATION POPUP */
+#center-notification {
+    position: fixed; top: 35%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9); color: #fff;
+    border: 2px solid #555; padding: 16px 28px;
+    border-radius: 8px; font-size: 18px; font-weight: bold;
+    pointer-events: none; opacity: 0; transition: opacity 0.3s ease;
+    z-index: 9999;
+}
+#center-notification.show { opacity: 1; }
+
+/* 5. MINECRAFT HOTBAR */
+.hotbar-container {
+    position: fixed; bottom: 20px; left: 50%;
+    transform: translateX(-50%); display: flex;
+    background: #8b8b8b; border: 4px solid #373737; padding: 4px; gap: 4px; z-index: 1000;
+}
+.hotbar-slot {
+    width: 48px; height: 48px; background: #8b8b8b;
+    border: 3px inset #fff; position: relative;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.hotbar-slot.selected { border: 4px solid #fff; outline: 2px solid #000; background: #a0a0a0; }
+.hotbar-slot .slot-num { position: absolute; top: 2px; left: 4px; font-size: 11px; color: #fff; font-weight: bold; }
+.hotbar-slot .item-icon { width: 30px; height: 30px; object-fit: contain; }
