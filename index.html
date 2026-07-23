@@ -8,7 +8,7 @@
 </head>
 <body>
 
-    <!-- STATS OVERLAY -->
+    <!-- HUD OVERLAY -->
     <div class="stats-overlay">
         <div class="stat-box">
             <span class="stat-label">HUNGER</span>
@@ -28,7 +28,7 @@
         </div>
     </div>
 
-    <p class="controls-hint">WASD / Arrows = Move | E = Interact / Place Bed | 1-9 = Select Hotbar Slot | Keep Hygiene > 15!</p>
+    <p class="controls-hint">WASD / Arrows = Move | E = Interact / Place Item | 1-9 = Hotbar</p>
 
     <!-- GAME CANVAS -->
     <canvas id="gameCanvas"></canvas>
@@ -37,7 +37,7 @@
     <div id="flappy-modal" class="modal hidden">
         <div class="modal-content flappy-card">
             <h3>FLAPPY BIRD ARCADE</h3>
-            <p style="font-size: 13px; margin-bottom: 10px; color: #ffcc00;">Press SPACEBAR to flap!</p>
+            <p style="font-size: 12px; color: #ffcc00; margin-bottom: 8px;">SPACEBAR = Flap!</p>
             <canvas id="flappyCanvas" width="360" height="380"></canvas>
             <button class="btn btn-action" onclick="closeModal('flappy-modal')">Quit</button>
         </div>
@@ -47,7 +47,7 @@
     <div id="dodge-modal" class="modal hidden">
         <div class="modal-content">
             <h3 style="color: #00d2ff;">CYBER DODGE</h3>
-            <p style="font-size: 13px; margin-bottom: 10px; color: #00d2ff;">Use A/D or Left/Right Arrows to dodge!</p>
+            <p style="font-size: 12px; color: #00d2ff; margin-bottom: 8px;">A/D or Arrows = Dodge</p>
             <canvas id="dodgeCanvas" width="360" height="380"></canvas>
             <button class="btn btn-action" onclick="closeModal('dodge-modal')">Quit</button>
         </div>
@@ -57,20 +57,30 @@
     <div id="catch-modal" class="modal hidden">
         <div class="modal-content">
             <h3 style="color: #ff0055;">NEON CATCH</h3>
-            <p style="font-size: 13px; margin-bottom: 10px; color: #ff0055;">Catch falling energy stars!</p>
+            <p style="font-size: 12px; color: #ff0055; margin-bottom: 8px;">Catch Energy Stars!</p>
             <canvas id="catchCanvas" width="360" height="380"></canvas>
             <button class="btn btn-action" onclick="closeModal('catch-modal')">Quit</button>
+        </div>
+    </div>
+
+    <!-- UNIVERSAL ACTION MINIGAME (Dig Dug, Time Crisis, OutRun, NBA) -->
+    <div id="action-minigame-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3 id="action-title" style="color: #ffcc00;">ARCADE CABINET</h3>
+            <p id="action-desc" style="font-size: 12px; margin-bottom: 10px; color: #aaa;">Get Ready!</p>
+            <canvas id="actionCanvas" width="360" height="280"></canvas>
+            <button class="btn btn-action" onclick="closeModal('action-minigame-modal')">Give Up</button>
         </div>
     </div>
 
     <!-- CURSED MACHINE HINT MODAL -->
     <div id="cursed-modal" class="modal hidden">
         <div class="modal-content" style="border-color: #ff0000; box-shadow: 0 0 25px rgba(255, 0, 0, 0.6);">
-            <h3 style="color: #ff0000;">??? CURSED MACHINE ???</h3>
-            <p style="font-size: 13px; color: #ff6666; margin: 10px 0; line-height: 1.5;" id="cursed-text">
-                The screen glimmers with binary numbers on scoreboards submitted by user 'FFB'...<br>
-                Decoding binary numbers (1 to 14) from each cabinet's high score reveals first letters that spell:<br><br>
-                <strong style="color: #fff; background: #990000; padding: 4px 8px; border-radius: 4px;">"DONTTRUSTNAOMI"</strong>
+            <h3 style="color: #ff0000;">??? CURSED CABINET ???</h3>
+            <p style="font-size: 13px; color: #ff6666; margin: 10px 0; line-height: 1.5;">
+                High scores left by user <strong>'FFB'</strong> display binary codes:<br><br>
+                <code style="color: #00ff00; background: #002200; padding: 4px 8px; border-radius: 4px;">01000100 01001111 ...</code><br><br>
+                Decoded message spells out: <strong>"DONTTRUSTNAOMI"</strong>
             </p>
             <button class="btn btn-action" onclick="closeModal('cursed-modal')">Step Away</button>
         </div>
@@ -81,10 +91,10 @@
         <div class="modal-content">
             <h3>NAOMI'S PRIZE COUNTER</h3>
             <div class="button-grid">
-                <button class="btn btn-shop" onclick="buyFromNaomi('steak')">Buy Steak (50 Cr)</button>
-                <button class="btn btn-shop" onclick="buyFromNaomi('snack')">Buy Snack (15 Cr)</button>
-                <button class="btn btn-shop" onclick="buyFromNaomi('soap')">Buy Soap (30 Cr)</button>
-                <button class="btn btn-shop" onclick="buyFromNaomi('bed')">Buy Bed (200 Cr)</button>
+                <button class="btn btn-shop" onclick="buyFromNaomi('steak')">Steak (50 Cr)</button>
+                <button class="btn btn-shop" onclick="buyFromNaomi('snack')">Snack (15 Cr)</button>
+                <button class="btn btn-shop" onclick="buyFromNaomi('soap')">Soap (30 Cr)</button>
+                <button class="btn btn-shop" onclick="buyFromNaomi('bed')">Bed (200 Cr)</button>
             </div>
             <button class="btn btn-action" onclick="closeModal('shop-modal')">Close</button>
         </div>
@@ -93,31 +103,34 @@
     <!-- SECRET TERMINAL MODAL -->
     <div id="terminal-modal" class="modal hidden">
         <div class="modal-content terminal-card">
-            <h4>SECRET TERMINAL (1,000 TOKEN GAME)</h4>
-            <p style="font-size: 12px; color: #00ff00; margin-bottom: 8px;">Enter 14-letter password decoded from high score binary clues:</p>
-            <input type="text" id="terminal-input" placeholder="ENTER 14-LETTER CODE..." class="terminal-input">
-            <button class="btn btn-terminal" onclick="submitPasscode()">SUBMIT CODE</button>
+            <h4>SECRET TERMINAL (1,000 TOKEN ACCESS)</h4>
+            <p style="font-size: 12px; color: #00ff00; margin-bottom: 8px;">Enter 14-letter code decoded from binary high scores:</p>
+            <input type="text" id="terminal-input" placeholder="DECRYPT PASSCODE..." class="terminal-input">
+            <button class="btn btn-terminal" onclick="submitPasscode()">DECRYPT TERMINAL</button>
             <button class="btn btn-action" onclick="closeModal('terminal-modal')">Close</button>
         </div>
     </div>
 
-    <!-- STORY LOG LOG MODAL -->
+    <!-- STORY MODAL -->
     <div id="story-modal" class="modal hidden">
         <div class="modal-content" style="border-color: #00ff00; max-width: 480px;">
-            <h3 style="color: #00ff00;" id="story-header">FFB TRANSMISSION</h3>
+            <h3 style="color: #00ff00;" id="story-header">FFB LOG TRANSMISSION</h3>
             <p id="story-body" style="font-size: 13px; color: #aaffaa; text-align: left; line-height: 1.5; margin: 15px 0; white-space: pre-line;"></p>
             <button class="btn btn-action" id="story-btn" onclick="nextStoryStep()">Continue</button>
         </div>
     </div>
 
-    <!-- BATTLE MODAL -->
+    <!-- ACTIVE BOSS BATTLE MODAL -->
     <div id="battle-modal" class="modal hidden">
         <div class="modal-content battle-card">
             <h2 id="battle-title" style="color: #ff0055;">1,000-GAME SHOWDOWN</h2>
-            <p id="battle-desc">Beat Naomi in games before she claims your soul forever!</p>
-            <div class="bar-bg" style="margin: 15px 0;"><div id="boss-hp-bar" style="width: 100%; height: 100%; background: #ff0055;"></div></div>
-            <p>Games Remaining To Win: <strong id="boss-hp-text">1000</strong></p>
-            <button class="btn btn-terminal" style="margin-top: 15px;" onclick="attackNaomi()">PLAY GAME vs NAOMI!</button>
+            <p id="battle-desc" style="font-size: 12px; color: #aaa;">Beat Naomi's mini-challenges to deal damage!</p>
+            <div class="bar-bg" style="margin: 15px 0; width: 100%;"><div id="boss-hp-bar" style="width: 100%; height: 100%; background: #ff0055;"></div></div>
+            <p style="font-size: 13px;">Naomi HP: <strong id="boss-hp-text">1000</strong></p>
+            
+            <canvas id="bossCanvas" width="340" height="180" style="margin-top: 10px; background: #050510; border: 2px solid #ff0055; border-radius: 6px;"></canvas>
+            <p id="boss-prompt" style="font-size: 14px; font-weight: bold; color: #ffcc00; margin-top: 10px;">PRESS SPACEBAR RAPIDLY!</p>
+            <button class="btn btn-terminal" style="margin-top: 10px;" id="boss-action-btn" onclick="handleBossAction()">ATTACK!</button>
         </div>
     </div>
 
@@ -125,7 +138,7 @@
     <div id="gameover-modal" class="modal hidden">
         <div class="modal-content" style="border-color: #ff0000;">
             <h1 style="color: #ff0000; font-size: 28px;" id="gameover-title">GAME OVER</h1>
-            <p id="death-reason" style="margin: 15px 0; color: #aaa;">Your soul has been trapped inside an arcade machine forever...</p>
+            <p id="death-reason" style="margin: 15px 0; color: #aaa;">Trapped in an arcade cabinet forever...</p>
             <button class="btn btn-action" onclick="location.reload()">RESTART SURVIVAL</button>
         </div>
     </div>
