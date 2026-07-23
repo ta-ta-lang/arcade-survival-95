@@ -74,7 +74,95 @@
         <div id="hotbar-slot-8" class="hotbar-slot" onclick="selectHotbarSlot(7)"></div>
         <div id="hotbar-slot-9" class="hotbar-slot" onclick="selectHotbarSlot(8)"></div>
     </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>10-Year Arcade Survival</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
 
+    <!-- 1. STATS DASHBOARD OVERLAY -->
+    <div class="stats-overlay">
+        <div class="stat-box">
+            <span class="stat-label">HUNGER</span>
+            <div class="bar-bg"><div id="hunger-bar"></div></div>
+        </div>
+        <div class="stat-box">
+            <span class="stat-label">ENERGY</span>
+            <div class="bar-bg"><div id="energy-bar"></div></div>
+        </div>
+        <div class="stat-box">
+            <span class="stat-label">HYGIENE</span>
+            <div class="bar-bg"><div id="hygiene-bar"></div></div>
+        </div>
+        <div class="currency-display">
+            <span>Tokens: <strong id="token-display">1000</strong></span>
+            <span>Credits: <strong id="credit-display">0</strong></span>
+        </div>
+    </div>
+
+    <p class="controls-hint">Use <strong>WASD</strong> or <strong>Arrow Keys</strong> to walk around. Press <strong>E</strong> to interact with objects!</p>
+
+    <!-- 2. GAME CANVAS (WALKABLE ARCADE WORLD) -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- 3. FLAPPY BIRD MINIGAME MODAL -->
+    <div id="flappy-modal" class="modal hidden">
+        <div class="modal-content flappy-card">
+            <h3>FLAPPY BIRD ARCADE</h3>
+            <p style="font-size: 12px; margin-bottom: 10px; color: #aaa;">Press <strong>SPACEBAR</strong> to flap! Collect 10 Credits per pipe passed.</p>
+            <canvas id="flappyCanvas" width="320" height="400"></canvas>
+            <button class="btn btn-action" onclick="closeFlappyModal()">Quit Game</button>
+        </div>
+    </div>
+
+    <!-- 4. INTERACTION POPUP / NAOMI SHOP MODAL -->
+    <div id="shop-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>NAOMI'S PRIZE COUNTER</h3>
+            <p>Select an item to buy to your Hotbar:</p>
+            <div class="button-grid">
+                <button class="btn btn-shop" onclick="buyFromNaomi('steak')">Buy Steak ($50)</button>
+                <button class="btn btn-shop" onclick="buyFromNaomi('snack')">Buy Snack ($15)</button>
+                <button class="btn btn-shop" onclick="buyFromNaomi('soap')">Buy Soap ($30)</button>
+                <button class="btn btn-shop" onclick="buyFromNaomi('bed')">Buy Bed ($200)</button>
+            </div>
+            <button class="btn btn-action" onclick="closeShopModal()">Close Shop</button>
+        </div>
+    </div>
+
+    <!-- 5. SECRET TERMINAL MODAL -->
+    <div id="terminal-modal" class="modal hidden">
+        <div class="modal-content terminal-card">
+            <h4>SECRET HIGH SCORE TERMINAL</h4>
+            <input type="text" id="terminal-input" placeholder="ENTER PASSWORD..." class="terminal-input">
+            <button class="btn btn-terminal" onclick="enterSecretTerminalPassword(document.getElementById('terminal-input').value)">SUBMIT</button>
+            <button class="btn btn-action" onclick="closeTerminalModal()" style="margin-top: 8px;">Close</button>
+        </div>
+    </div>
+
+    <!-- 6. FLOATING CENTER NOTIFICATION POPUP -->
+    <div id="center-notification"></div>
+
+    <!-- 7. MINECRAFT 9-SLOT HOTBAR UI -->
+    <div class="hotbar-container">
+        <div id="hotbar-slot-1" class="hotbar-slot" onclick="selectHotbarSlot(0)"></div>
+        <div id="hotbar-slot-2" class="hotbar-slot" onclick="selectHotbarSlot(1)"></div>
+        <div id="hotbar-slot-3" class="hotbar-slot" onclick="selectHotbarSlot(2)"></div>
+        <div id="hotbar-slot-4" class="hotbar-slot" onclick="selectHotbarSlot(3)"></div>
+        <div id="hotbar-slot-5" class="hotbar-slot" onclick="selectHotbarSlot(4)"></div>
+        <div id="hotbar-slot-6" class="hotbar-slot" onclick="selectHotbarSlot(5)"></div>
+        <div id="hotbar-slot-7" class="hotbar-slot" onclick="selectHotbarSlot(6)"></div>
+        <div id="hotbar-slot-8" class="hotbar-slot" onclick="selectHotbarSlot(7)"></div>
+        <div id="hotbar-slot-9" class="hotbar-slot" onclick="selectHotbarSlot(8)"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
     <script src="script.js"></script>
 </body>
 </html>
