@@ -8,7 +8,7 @@
 </head>
 <body>
 
-    <!-- 1. STATS DASHBOARD OVERLAY -->
+    <!-- STATS OVERLAY -->
     <div class="stats-overlay">
         <div class="stat-box">
             <span class="stat-label">HUNGER</span>
@@ -28,54 +28,88 @@
         </div>
     </div>
 
-    <!-- CLEANED UP SINGLE INSTRUCTION HINT -->
-    <p class="controls-hint">Use <strong>WASD</strong> or <strong>Arrow Keys</strong> to walk around. Press <strong>E</strong> to interact!</p>
+    <p class="controls-hint">WASD / Arrows = Move | E = Interact | 1-9 = Hotbar | Keep Hygiene > 15 so Naomi doesn't fight you!</p>
 
-    <!-- 2. GAME CANVAS -->
+    <!-- CANVAS WORLD -->
     <canvas id="gameCanvas"></canvas>
 
-    <!-- 3. FLAPPY BIRD MINIGAME MODAL -->
+    <!-- FLAPPY BIRD MODAL -->
     <div id="flappy-modal" class="modal hidden">
         <div class="modal-content flappy-card">
             <h3>FLAPPY BIRD ARCADE</h3>
-            <p style="font-size: 13px; margin-bottom: 12px; color: #ffcc00;">Press <strong>SPACEBAR</strong> to flap! +10 Credits per pipe.</p>
-            <canvas id="flappyCanvas" width="360" height="420"></canvas>
-            <button class="btn btn-action" onclick="closeFlappyModal()">Quit Game</button>
+            <p style="font-size: 13px; margin-bottom: 10px; color: #ffcc00;">Press SPACEBAR to flap!</p>
+            <canvas id="flappyCanvas" width="360" height="380"></canvas>
+            <button class="btn btn-action" onclick="closeModal('flappy-modal')">Quit</button>
         </div>
     </div>
 
-    <!-- 4. NAOMI SHOP MODAL -->
+    <!-- PLAYABLE MINIGAME 1: CYBER DODGE -->
+    <div id="dodge-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3 style="color: #00d2ff;">CYBER DODGE</h3>
+            <p style="font-size: 13px; margin-bottom: 10px; color: #00d2ff;">Use A/D or Left/Right Arrows to dodge!</p>
+            <canvas id="dodgeCanvas" width="360" height="380"></canvas>
+            <button class="btn btn-action" onclick="closeModal('dodge-modal')">Quit</button>
+        </div>
+    </div>
+
+    <!-- PLAYABLE MINIGAME 2: NEON CATCH -->
+    <div id="catch-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3 style="color: #ff0055;">NEON CATCH</h3>
+            <p style="font-size: 13px; margin-bottom: 10px; color: #ff0055;">Catch falling energy stars!</p>
+            <canvas id="catchCanvas" width="360" height="380"></canvas>
+            <button class="btn btn-action" onclick="closeModal('catch-modal')">Quit</button>
+        </div>
+    </div>
+
+    <!-- SHOP MODAL -->
     <div id="shop-modal" class="modal hidden">
         <div class="modal-content">
             <h3>NAOMI'S PRIZE COUNTER</h3>
-            <p>Buy items to add to your Hotbar:</p>
             <div class="button-grid">
                 <button class="btn btn-shop" onclick="buyFromNaomi('steak')">Buy Steak (50 Cr)</button>
                 <button class="btn btn-shop" onclick="buyFromNaomi('snack')">Buy Snack (15 Cr)</button>
                 <button class="btn btn-shop" onclick="buyFromNaomi('soap')">Buy Soap (30 Cr)</button>
                 <button class="btn btn-shop" onclick="buyFromNaomi('bed')">Buy Bed (200 Cr)</button>
             </div>
-            <button class="btn btn-action" onclick="closeShopModal()">Close Shop</button>
+            <button class="btn btn-action" onclick="closeModal('shop-modal')">Close</button>
         </div>
     </div>
 
-    <!-- 5. SECRET TERMINAL MODAL -->
+    <!-- SECRET TERMINAL MODAL -->
     <div id="terminal-modal" class="modal hidden">
         <div class="modal-content terminal-card">
-            <h4>SECRET HIGH SCORE TERMINAL</h4>
+            <h4>SECRET TERMINAL</h4>
             <input type="text" id="terminal-input" placeholder="ENTER PASSWORD..." class="terminal-input">
-            <button class="btn btn-terminal" onclick="enterSecretTerminalPassword(document.getElementById('terminal-input').value)">SUBMIT</button>
-            <button class="btn btn-action" onclick="closeTerminalModal()" style="margin-top: 8px;">Close</button>
+            <button class="btn btn-terminal" onclick="submitPasscode()">SUBMIT</button>
+            <button class="btn btn-action" onclick="closeModal('terminal-modal')">Close</button>
         </div>
     </div>
 
-    <!-- 6. FLOATING NOTIFICATION -->
-    <div id="center-notification"></div>
-
-    <!-- 7. HOTBAR UI -->
-    <div class="hotbar-container" id="hotbar-container">
-        <!-- Rendered dynamically via JavaScript -->
+    <!-- NAOMI BOSS / ENFORCEMENT BATTLE MODAL -->
+    <div id="battle-modal" class="modal hidden">
+        <div class="modal-content battle-card">
+            <h2 id="battle-title" style="color: #ff0055;">NAOMI ENFORCEMENT BATTLE</h2>
+            <p id="battle-desc">Click or press SPACE quickly to strike Naomi before time runs out!</p>
+            <div class="bar-bg" style="margin: 15px 0;"><div id="boss-hp-bar" style="width: 100%; height: 100%; background: #ff0055;"></div></div>
+            <p>Boss HP: <strong id="boss-hp-text">100</strong></p>
+            <button class="btn btn-terminal" style="margin-top: 15px;" onclick="attackNaomi()">STRIKE NAOMI!</button>
+        </div>
     </div>
+
+    <!-- GAME OVER / DIED MODAL -->
+    <div id="gameover-modal" class="modal hidden">
+        <div class="modal-content" style="border-color: #ff0000;">
+            <h1 style="color: #ff0000; font-size: 28px;">GAME OVER</h1>
+            <p id="death-reason" style="margin: 15px 0; color: #aaa;">Your soul has been trapped inside an arcade machine forever...</p>
+            <button class="btn btn-action" onclick="location.reload()">RESTART SURVIVAL</button>
+        </div>
+    </div>
+
+    <!-- NOTIFICATION & HOTBAR -->
+    <div id="center-notification"></div>
+    <div class="hotbar-container" id="hotbar-container"></div>
 
     <script src="script.js"></script>
 </body>
