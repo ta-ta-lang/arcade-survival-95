@@ -20,14 +20,14 @@ const playerStats = {
 
     sleep() {
         if (!this.hasBedPlaced) {
-            showNotification("You don't have a bed set up! Buy one from Naomi and place it.");
+            showNotification("You need to buy and place a bed first!");
             return;
         }
         this.energy = this.maxEnergy;
         this.dailyTokens = 1000;
         resetMachinePlayLimits();
         this.updateUI();
-        showNotification("Slept well! Energy & Daily Tokens fully restored.");
+        showNotification("Day reset! Energy & Tokens fully restored.");
     },
 
     updateUI() {
@@ -67,7 +67,7 @@ const playerStats = {
 setInterval(() => { playerStats.decay(); }, 2000);
 
 // ==========================================
-// 2. NOTIFICATION SYSTEM & HOTBAR (KEYS 1-9 & E)
+// 2. NOTIFICATIONS & HOTBAR SELECTION
 // ==========================================
 function showNotification(message, duration = 2500) {
     let notifyBox = document.getElementById('center-notification');
@@ -93,7 +93,7 @@ function selectHotbarSlot(slotIndex) {
 function useHeldItem() {
     const index = playerStats.selectedSlot;
     const item = playerStats.hotbar[index];
-    if (!item) { showNotification("Nothing in selected slot!"); return; }
+    if (!item) { showNotification("Nothing selected in hotbar!"); return; }
 
     if (item.type === "food") {
         playerStats.hunger = Math.min(playerStats.maxHunger, playerStats.hunger + item.val);
@@ -104,16 +104,16 @@ function useHeldItem() {
         showNotification(`Used ${item.name}! Hygiene restored.`);
         playerStats.hotbar[index] = null;
     } else if (item.type === "bed") {
-        if (playerStats.hasBedPlaced) { showNotification("Bed already placed!"); return; }
+        if (playerStats.hasBedPlaced) { showNotification("Bed is already placed!"); return; }
         playerStats.hasBedPlaced = true;
-        showNotification("Bed placed in your room! Walk to it and press E to Sleep.");
+        showNotification("Bed placed! Walk over and press E to sleep.");
         playerStats.hotbar[index] = null;
     }
     playerStats.updateUI();
 }
 
 // ==========================================
-// 3. SHOP & MACHINE LOGIC
+// 3. SHOP & MACHINE INTERACTIONS
 // ==========================================
 const naomiShop = {
     steak: { name: "Steak", cost: 50, type: "food", val: 40, icon: "https://img.icons8.com/color/48/steak.png" },
@@ -133,13 +133,13 @@ function buyFromNaomi(itemKey) {
 
     const emptyIndex = playerStats.hotbar.findIndex(slot => slot === null);
     if (emptyIndex === -1) {
-        showNotification("Hotbar full! Clear a slot first.");
+        showNotification("Hotbar full!");
         return;
     }
 
     playerStats.credits -= item.cost;
     playerStats.hotbar[emptyIndex] = { ...item };
-    showNotification(`Bought ${item.name}! Added to Slot ${emptyIndex + 1}.`);
+    showNotification(`Bought ${item.name}!`);
     playerStats.updateUI();
 }
 
@@ -169,7 +169,7 @@ function playMachine(machineId, tokenCost, rewardCredits) {
     playerStats.credits += rewardCredits;
 
     playerStats.updateUI();
-    showNotification(`Played ${machineId}! Won +${rewardCredits} Credits!`);
+    showNotification(`Played Arcade Machine! Won +${rewardCredits} Credits!`);
 }
 
 function resetMachinePlayLimits() {
@@ -182,7 +182,7 @@ function closeTerminalModal() { document.getElementById('terminal-modal').classL
 function enterSecretTerminalPassword(inputPassword) {
     const cleanPassword = inputPassword.replace(/[^a-zA-Z]/g, "").toUpperCase();
     if (cleanPassword === "DONTTRUSTNAOMI") {
-        showNotification("ACCESS GRANTED: Challenge Naomi to 1,000 games!");
+        showNotification("ACCESS GRANTED: Secret revealed!");
         closeTerminalModal();
     } else {
         showNotification("INCORRECT PASSWORD.");
@@ -190,19 +190,26 @@ function enterSecretTerminalPassword(inputPassword) {
 }
 
 // ==========================================
-// 4. 2D CANVAS ARCADE WORLD & CHARACTER ENGINE
+// 4. FULLSCREEN CANVAS & RETRO SPRITE DRAWING
 // ==========================================
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-const player = { x: 400, y: 300, width: 24, height: 24, speed: 3.5, color: '#00ffcc' };
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+const player = { x: 300, y: 300, width: 32, height: 32, speed: 4.5 };
 
 const worldObjects = [
-    { id: 'naomi', name: "Naomi Counter", x: 350, y: 50, w: 100, h: 40, color: '#e91e63' },
-    { id: 'machine1', name: "Machine #1", x: 100, y: 150, w: 50, h: 60, color: '#2196f3', cost: 100, win: 50 },
-    { id: 'machine2', name: "Machine #2", x: 200, y: 150, w: 50, h: 60, color: '#9c27b0', cost: 100, win: 75 },
-    { id: 'terminal', name: "Secret Terminal", x: 650, y: 80, w: 40, h: 50, color: '#00ff00' },
-    { id: 'bed', name: "Bed", x: 700, y: 400, w: 60, h: 60, color: '#ff9800' }
+    { id: 'naomi', name: "Naomi's Counter", x: 400, y: 100, w: 140, h: 60 },
+    { id: 'machine1', name: "Cyber Racer", x: 120, y: 220, w: 60, h: 90, color: '#00d2ff', cost: 100, win: 50 },
+    { id: 'machine2', name: "Neon Fighter", x: 220, y: 220, w: 60, h: 90, color: '#ff0055', cost: 100, win: 75 },
+    { id: 'terminal', name: "Hacker Terminal", x: 750, y: 120, w: 60, h: 70 },
+    { id: 'bed', name: "Rest Bed", x: 800, y: 450, w: 90, h: 70 }
 ];
 
 const keys = {};
@@ -210,15 +217,15 @@ window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; })
 window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
 function updateMovement() {
-    if (keys['w'] || keys['arrowup']) player.y = Math.max(10, player.y - player.speed);
-    if (keys['s'] || keys['arrowdown']) player.y = Math.min(canvas.height - player.height - 10, player.y + player.speed);
-    if (keys['a'] || keys['arrowleft']) player.x = Math.max(10, player.x - player.speed);
-    if (keys['d'] || keys['arrowright']) player.x = Math.min(canvas.width - player.width - 10, player.x + player.speed);
+    if (keys['w'] || keys['arrowup']) player.y = Math.max(20, player.y - player.speed);
+    if (keys['s'] || keys['arrowdown']) player.y = Math.min(canvas.height - player.height - 20, player.y + player.speed);
+    if (keys['a'] || keys['arrowleft']) player.x = Math.max(20, player.x - player.speed);
+    if (keys['d'] || keys['arrowright']) player.x = Math.min(canvas.width - player.width - 20, player.x + player.speed);
 }
 
 function checkWorldInteraction() {
     let nearestObj = null;
-    let minDist = 60; // Interaction distance
+    let minDist = 80;
 
     worldObjects.forEach(obj => {
         const cx = obj.x + obj.w / 2;
@@ -231,7 +238,7 @@ function checkWorldInteraction() {
     });
 
     if (!nearestObj) {
-        useHeldItem(); // If not near an object, use selected hotbar item!
+        useHeldItem();
         return;
     }
 
@@ -246,50 +253,190 @@ function checkWorldInteraction() {
     }
 }
 
-function drawWorld() {
+// --- DETAILED CUSTOM CANVAS DRAWING FUNCTIONS ---
+
+function drawArcadeCabinet(obj) {
+    // Cabinet Body
+    ctx.fillStyle = '#15151e';
+    ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
+    ctx.strokeStyle = obj.color;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(obj.x, obj.y, obj.w, obj.h);
+
+    // Glowing Marquee Title Top
+    ctx.fillStyle = obj.color;
+    ctx.fillRect(obj.x + 5, obj.y + 5, obj.w - 10, 16);
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 9px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText("ARCADE", obj.x + obj.w/2, obj.y + 16);
+
+    // CRT Screen
+    ctx.fillStyle = '#0a0a12';
+    ctx.fillRect(obj.x + 8, obj.y + 26, obj.w - 16, 30);
+    ctx.fillStyle = obj.color;
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(obj.x + 12, obj.y + 30, obj.w - 24, 22); // Screen glow
+    ctx.globalAlpha = 1.0;
+
+    // Control Panel & Joystick
+    ctx.fillStyle = '#222';
+    ctx.fillRect(obj.x + 5, obj.y + 60, obj.w - 10, 15);
+    // Joystick
+    ctx.fillStyle = '#ff0000';
+    ctx.beginPath();
+    ctx.arc(obj.x + 20, obj.y + 66, 4, 0, Math.PI * 2);
+    ctx.fill();
+    // Buttons
+    ctx.fillStyle = '#ffff00';
+    ctx.beginPath();
+    ctx.arc(obj.x + 38, obj.y + 66, 3, 0, Math.PI * 2);
+    ctx.arc(obj.x + 46, obj.y + 66, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Coin Door
+    ctx.fillStyle = '#333';
+    ctx.fillRect(obj.x + 18, obj.y + 78, obj.w - 36, 8);
+}
+
+function drawNaomiCounter(obj) {
+    // Wooden Counter
+    ctx.fillStyle = '#5c3a21';
+    ctx.fillRect(obj.x, obj.y + 20, obj.w, obj.h - 20);
+    ctx.fillStyle = '#8b5a2b';
+    ctx.fillRect(obj.x - 5, obj.y + 15, obj.w + 10, 10); // Countertop desk
+
+    // Naomi Character behind counter
+    // Hair
+    ctx.fillStyle = '#e91e63';
+    ctx.beginPath();
+    ctx.arc(obj.x + obj.w/2, obj.y + 2, 14, 0, Math.PI * 2);
+    ctx.fill();
+    // Head
+    ctx.fillStyle = '#ffdbac';
+    ctx.beginPath();
+    ctx.arc(obj.x + obj.w/2, obj.y + 5, 10, 0, Math.PI * 2);
+    ctx.fill();
+    // Eyes
+    ctx.fillStyle = '#000';
+    ctx.fillRect(obj.x + obj.w/2 - 4, obj.y + 4, 2, 3);
+    ctx.fillRect(obj.x + obj.w/2 + 2, obj.y + 4, 2, 3);
+
+    // Sign on counter
+    ctx.fillStyle = '#ffcc00';
+    ctx.font = 'bold 11px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText("NAOMI'S SHOP", obj.x + obj.w/2, obj.y + 42);
+}
+
+function drawTerminal(obj) {
+    // Desk
+    ctx.fillStyle = '#222';
+    ctx.fillRect(obj.x, obj.y + 30, obj.w, obj.h - 30);
+
+    // Glowing Green Hacker Monitor
+    ctx.fillStyle = '#002200';
+    ctx.fillRect(obj.x + 10, obj.y, obj.w - 20, 32);
+    ctx.strokeStyle = '#00ff00';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(obj.x + 10, obj.y, obj.w - 20, 32);
+
+    // Matrix lines on screen
+    ctx.fillStyle = '#00ff00';
+    ctx.font = '8px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText(">_PASS", obj.x + obj.w/2, obj.y + 18);
+}
+
+function drawBed(obj) {
+    if (!playerStats.hasBedPlaced) return;
+
+    // Wood frame
+    ctx.fillStyle = '#4a2e18';
+    ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
+    // Mattress / Blanket
+    ctx.fillStyle = '#2196f3';
+    ctx.fillRect(obj.x + 4, obj.y + 15, obj.w - 8, obj.h - 19);
+    // Pillow
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(obj.x + 8, obj.y + 4, obj.w - 16, 12);
+}
+
+function drawPlayerSprite() {
+    const px = player.x;
+    const py = player.y;
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.beginPath();
+    ctx.ellipse(px + 16, py + 30, 12, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Body / Hoodie
+    ctx.fillStyle = '#00ffcc';
+    ctx.fillRect(px + 8, py + 14, 16, 14);
+
+    // Pants
+    ctx.fillStyle = '#111122';
+    ctx.fillRect(px + 9, py + 26, 6, 6);
+    ctx.fillRect(px + 17, py + 26, 6, 6);
+
+    // Head
+    ctx.fillStyle = '#ffdbac';
+    ctx.fillRect(px + 10, py + 4, 12, 10);
+
+    // Hair
+    ctx.fillStyle = '#3e2723';
+    ctx.fillRect(px + 9, py + 1, 14, 5);
+
+    // Eyes
+    ctx.fillStyle = '#000';
+    ctx.fillRect(px + 12, py + 8, 2, 2);
+    ctx.fillRect(px + 18, py + 8, 2, 2);
+}
+
+function renderWorld() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw Floor Tiles Pattern
-    ctx.strokeStyle = '#222233';
-    for (let x = 0; x < canvas.width; x += 40) {
-        for (let y = 0; y < canvas.height; y += 40) {
-            ctx.strokeRect(x, y, 40, 40);
+    // Retro Carpet Tile Pattern Background
+    ctx.fillStyle = '#0d0d14';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = '#181826';
+    ctx.lineWidth = 1;
+    const tileSize = 50;
+    for (let x = 0; x < canvas.width; x += tileSize) {
+        for (let y = 0; y < canvas.height; y += tileSize) {
+            ctx.strokeRect(x, y, tileSize, tileSize);
         }
     }
 
-    // Draw Objects & Labels
+    // Render All World Objects
     worldObjects.forEach(obj => {
-        if (obj.id === 'bed' && !playerStats.hasBedPlaced) return; // Only draw bed if placed!
+        if (obj.id === 'machine1' || obj.id === 'machine2') drawArcadeCabinet(obj);
+        else if (obj.id === 'naomi') drawNaomiCounter(obj);
+        else if (obj.id === 'terminal') drawTerminal(obj);
+        else if (obj.id === 'bed') drawBed(obj);
 
-        ctx.fillStyle = obj.color;
-        ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '10px Courier New';
-        ctx.textAlign = 'center';
-        ctx.fillText(obj.name, obj.x + obj.w / 2, obj.y - 6);
+        // Object Label Tags
+        if (obj.id !== 'bed' || playerStats.hasBedPlaced) {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 10px Courier New';
+            ctx.textAlign = 'center';
+            ctx.fillText(obj.name, obj.x + obj.w / 2, obj.y - 8);
+        }
     });
 
-    // Draw Player Character
-    ctx.fillStyle = player.color;
-    ctx.fillRect(player.x, player.y, player.width, player.height);
-    
-    // Player head outline
-    ctx.strokeStyle = '#ffffff';
-    ctx.strokeRect(player.x, player.y, player.width, player.height);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '10px Courier New';
-    ctx.textAlign = 'center';
-    ctx.fillText("YOU", player.x + player.width / 2, player.y - 6);
+    // Render Character
+    drawPlayerSprite();
 }
 
 function gameLoop() {
     updateMovement();
-    drawWorld();
+    renderWorld();
     requestAnimationFrame(gameLoop);
 }
 
-// Start Game Loop & Initialize UI
+// Start Game Loop
 playerStats.updateUI();
 requestAnimationFrame(gameLoop);
