@@ -1,558 +1,516 @@
-// --- GAME ENGINE & STATE ---
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+// ==========================================
+// 1. STATS, DECAY & DEATH SYSTEM
+// ==========================================
+const playerStats = {
+    hunger: 100, maxHunger: 100,
+    energy: 100, maxEnergy: 100,
+    hygiene: 100, maxHygiene: 100,
+    dailyTokens: 1000, credits: 0,
+    hotbar: new Array(9).fill(null),
+    selectedSlot: 0,
+    placedBed: null,
+    isDead: false,
 
-const miniCanvas = document.getElementById('minigameCanvas');
-const miniCtx = miniCanvas.getContext('2d');
+    decay() {
+        if (this.isDead) return;
 
-// Game State
-const state = {
-  day: 1,
-  tokens: 1000,
-  credits: 0,
-  timeDilation: false,
-  discoveredFFB: false,
-  unlockedCabinet: false,
-  naomiChallenged: false,
-  inDialogue: false,
-  activeMinigame: null,
-  gameWon: false
+        this.hunger = Math.max(0, this.hunger - 0.3);
+        this.energy = Math.max(0, this.energy - 0.25);
+        this.hygiene = Math.max(0, this.hygiene - 0.2);
+
+        if (this.hunger <= 0) {
+            triggerGameOver("You passed out from severe starvation!");
+            return;
+        }
+
+        if (this.hygiene < 15 && checkDistanceToNaomi() < 220) {
+            startNaomiBattle("RULE VIOLATION: Poor Hygiene near Naomi's Counter!");
+        }
+
+        this.updateUI();
+    },
+
+    sleep() {
+        if (!this.placedBed) { showNotification("Buy and place a bed first!"); return; }
+        this.energy = this.maxEnergy;
+        this.dailyTokens = 1000;
+        resetMachinePlayLimits();
+        this.updateUI();
+        showNotification("Slept well! Daily tokens & energy restored.");
+    },
+
+    updateUI() {
+        document.getElementById('hunger-bar').style.width = `${this.hunger}%`;
+        document.getElementById('energy-bar').style.width = `${this.energy}%`;
+        document.getElementById('hygiene-bar').style.width = `${this.hygiene}%`;
+        document.getElementById('token-display').innerText = Math.floor(this.dailyTokens);
+        document.getElementById('credit-display').innerText = Math.floor(this.credits);
+        this.renderHotbar();
+    },
+
+    renderHotbar() {
+        const container = document.getElementById('hotbar-container');
+        if (!container) return;
+        let html = '';
+        for (let i = 0; i < 9; i++) {
+            const item = this.hotbar[i];
+            const isSel = (i === this.selectedSlot) ? 'selected' : '';
+            const content = item ? `<div class="item-badge" style="background:${item.color}">${item.name}</div>` : '';
+            html += `<div class="hotbar-slot ${isSel}" onclick="selectSlot(${i})"><span class="slot-num">${i + 1}</span>${content}</div>`;
+        }
+        container.innerHTML = html;
+    }
 };
 
-// Player Object
-const player = {
-  x: 400,
-  y: 500,
-  size: 20,
-  speed: 4,
-  dx: 0,
-  dy: 0,
-  color: '#50fa7b'
-};
+setInterval(() => playerStats.decay(), 2000);
 
-// Input Handling
-const keys = {};
-
-window.addEventListener('keydown', (e) => {
-  keys[e.key.toLowerCase()] = true;
-  if (e.key === 'Escape' && state.activeMinigame) {
-    closeMinigame();
-  }
-});
-
-window.addEventListener('keyup', (e) => {
-  keys[e.key.toLowerCase()] = false;
-});
-
-// HUD Elements
-const hudDay = document.getElementById('hud-day');
-const hudTokens = document.getElementById('hud-tokens');
-const hudCredits = document.getElementById('hud-credits');
-const hudTime = document.getElementById('hud-time');
-
-function updateHUD() {
-  hudDay.innerText = state.day;
-  hudTokens.innerText = state.tokens;
-  hudCredits.innerText = state.credits;
-  hudTime.innerText = state.timeDilation ? "ON (10% Speed)" : "OFF";
+function triggerGameOver(reason) {
+    playerStats.isDead = true;
+    document.getElementById('death-reason').innerText = reason;
+    document.getElementById('gameover-modal').classList.remove('hidden');
 }
 
-// --- WORLD MAP OBJECTS & INTERACTABLES ---
-const interactables = [
-  { id: 'skeeball', x: 100, y: 120, width: 60, height: 60, color: '#ffb86c', name: 'Skee-Ball Arcade' },
-  { id: 'flappy', x: 220, y: 120, width: 60, height: 60, color: '#bd93f9', name: 'Flappy Bird Arcade' },
-  { id: 'invaders', x: 340, y: 120, width: 60, height: 60, color: '#ff79c6', name: 'Space Defender Arcade' },
-  { id: 'scoreboard', x: 500, y: 120, width: 80, height: 40, color: '#ff5555', name: 'Global Scoreboard' },
-  { id: 'naomi', x: 680, y: 250, width: 70, height: 80, color: '#8be9fd', name: 'N40M1 Exchange Counter' },
-  { id: 'secretCabinet', x: 100, y: 460, width: 60, height: 60, color: '#44475a', name: 'Dark Black Cabinet' },
-  { id: 'bed', x: 700, y: 460, width: 70, height: 90, color: '#f1fa8c', name: 'Rest Area / Bed' }
+function selectSlot(idx) {
+    playerStats.selectedSlot = idx;
+    playerStats.updateUI();
+}
+
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+function showNotification(msg) {
+    const el = document.getElementById('center-notification');
+    el.innerText = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ==========================================
+// 2. ITEM USE & BED PLACEMENT
+// ==========================================
+function useSelectedItem() {
+    const idx = playerStats.selectedSlot;
+    const item = playerStats.hotbar[idx];
+    if (!item) return false;
+
+    if (item.type === "food") {
+        playerStats.hunger = Math.min(playerStats.maxHunger, playerStats.hunger + item.val);
+        showNotification(`Ate ${item.name}! +${item.val} Hunger.`);
+        playerStats.hotbar[idx] = null;
+        playerStats.updateUI();
+        return true;
+    } else if (item.type === "hygiene") {
+        playerStats.hygiene = playerStats.maxHygiene;
+        showNotification(`Used ${item.name}! Hygiene restored.`);
+        playerStats.hotbar[idx] = null;
+        playerStats.updateUI();
+        return true;
+    } else if (item.type === "bed") {
+        if (playerStats.placedBed) {
+            showNotification("Bed is already placed!");
+            return true;
+        }
+        playerStats.placedBed = { x: player.x - 40, y: player.y + 60, w: 160, h: 100 };
+        playerStats.hotbar[idx] = null;
+        playerStats.updateUI();
+        showNotification("Bed placed! Press E near it to sleep.");
+        return true;
+    }
+    return false;
+}
+
+// ==========================================
+// 3. STORYLINE & TERMINAL UNLOCK SYSTEM
+// ==========================================
+let storyStep = 0;
+let bossHP = 1000;
+let isFinalBoss = false;
+
+const storyDialogue = [
+    {
+        header: ">_ TERMINAL LOG #01",
+        body: "I have to be quick... well done for figuring out the binary code from the high score boards.\n\nYou think you've only been trapped here a few months, don't you?",
+        btn: "Read Next"
+    },
+    {
+        header: ">_ TERMINAL LOG #02",
+        body: "Look around you... each machine houses the soul of a person who attempted this challenge before you.\n\nThey are trapped in these cabinets for all eternity... and if you don't escape, you will become a machine too.",
+        btn: "Ask question..."
+    },
+    {
+        header: ">_ PLAYER INPUT LOG",
+        body: "You type into the terminal: 'How long have we actually been in here?'\n\nFFB responds:\n'10 YEARS.'",
+        btn: "What?!"
+    },
+    {
+        header: ">_ TERMINAL LOG #03",
+        body: "Any day now, you will become N40M1's next servant for all eternity.\n\nThere is only one way out: You must challenge N40M1 to a 1,000-Game Showdown and beat her at every game!",
+        btn: "Challenge N40M1!"
+    }
 ];
 
-// --- DIALOGUE SYSTEM ---
-const dialogueBox = document.getElementById('dialogue-box');
-const dialogueTitle = document.getElementById('dialogue-title');
-const dialogueText = document.getElementById('dialogue-text');
-const dialogueOptions = document.getElementById('dialogue-options');
-
-function showDialogue(title, text, options = []) {
-  state.inDialogue = true;
-  dialogueTitle.innerText = title;
-  dialogueText.innerText = text;
-  dialogueOptions.innerHTML = '';
-
-  if (options.length === 0) {
-    options.push({ text: "Close (E / Space)", action: closeDialogue });
-  }
-
-  options.forEach(opt => {
-    const btn = document.createElement('button');
-    btn.className = 'dialogue-btn';
-    btn.innerText = opt.text;
-    btn.onclick = () => {
-      opt.action();
-    };
-    dialogueOptions.appendChild(btn);
-  });
-
-  dialogueBox.classList.remove('hidden');
+function submitPasscode() {
+    const input = document.getElementById('terminal-input').value.trim().toUpperCase();
+    if (input === "DONTTRUSTNAOMI") {
+        closeModal('terminal-modal');
+        storyStep = 0;
+        showStoryStep();
+    } else {
+        showNotification("INVALID ACCESS CODE!");
+    }
 }
 
-function closeDialogue() {
-  dialogueBox.classList.add('hidden');
-  state.inDialogue = false;
+function showStoryStep() {
+    const current = storyDialogue[storyStep];
+    document.getElementById('story-header').innerText = current.header;
+    document.getElementById('story-body').innerText = current.body;
+    document.getElementById('story-btn').innerText = current.btn;
+    document.getElementById('story-modal').classList.remove('hidden');
 }
 
-// --- MINIGAME OVERLAY SYSTEM ---
-const minigameOverlay = document.getElementById('minigame-overlay');
-const minigameTitle = document.getElementById('minigame-title');
-document.getElementById('minigame-close').onclick = closeMinigame;
-
-function startMinigame(type) {
-  state.activeMinigame = type;
-  minigameOverlay.classList.remove('hidden');
-  state.inDialogue = true;
-
-  if (type === 'flappy') initFlappyGame();
-  if (type === 'invaders') initInvadersGame();
-  if (type === 'boss') initBossBattle();
+function nextStoryStep() {
+    storyStep++;
+    if (storyStep < storyDialogue.length) {
+        showStoryStep();
+    } else {
+        closeModal('story-modal');
+        initiateNaomiShowdown();
+    }
 }
 
-function closeMinigame() {
-  state.activeMinigame = null;
-  minigameOverlay.classList.add('hidden');
-  state.inDialogue = false;
+function initiateNaomiShowdown() {
+    isFinalBoss = true;
+    bossHP = 1000;
+    document.getElementById('battle-title').innerText = "NAOMI 1,000-GAME SHOWDOWN";
+    document.getElementById('battle-desc').innerText = "Naomi grins: 'Be warned! If you lose, your soul is mine forever!'";
+    document.getElementById('battle-modal').classList.remove('hidden');
+    updateBossUI();
 }
 
-// --- INTERACTION LOGIC ---
-function checkInteractions() {
-  if (state.inDialogue || state.activeMinigame) return;
+function startNaomiBattle(reason) {
+    isFinalBoss = false;
+    bossHP = 100;
+    document.getElementById('battle-title').innerText = "NAOMI ENFORCEMENT BATTLE";
+    document.getElementById('battle-desc').innerText = reason;
+    document.getElementById('battle-modal').classList.remove('hidden');
+    updateBossUI();
+}
 
-  let nearObject = null;
-  interactables.forEach(obj => {
-    const dist = Math.hypot((player.x + player.size/2) - (obj.x + obj.width/2), (player.y + player.size/2) - (obj.y + obj.height/2));
-    if (dist < 55) {
-      nearObject = obj;
-    }
-  });
-
-  if (nearObject && (keys['e'] || keys[' '])) {
-    keys['e'] = false;
-    keys[' '] = false;
-
-    // Route Interaction
-    if (nearObject.id === 'skeeball') {
-      if (state.tokens >= 10) {
-        state.tokens -= 10;
-        state.credits += 50;
-        updateHUD();
-        showDialogue("SKEE-BALL", "You roll a near-perfect streak!\n\n+50 Credits earned! (-10 Tokens)");
-      } else {
-        showDialogue("SKEE-BALL", "You don't have enough tokens left today!");
-      }
-    }
-
-    else if (nearObject.id === 'flappy') {
-      if (state.tokens >= 50) {
-        state.tokens -= 50;
-        updateHUD();
-        minigameTitle.innerText = "FLAPPY BIRD ARCADE";
-        startMinigame('flappy');
-      } else {
-        showDialogue("FLAPPY BIRD", "Requires 50 Tokens to play!");
-      }
-    }
-
-    else if (nearObject.id === 'invaders') {
-      if (state.tokens >= 50) {
-        state.tokens -= 50;
-        updateHUD();
-        minigameTitle.innerText = "SPACE DEFENDER ARCADE";
-        startMinigame('invaders');
-      } else {
-        showDialogue("SPACE DEFENDER", "Requires 50 Tokens to play!");
-      }
-    }
-
-    else if (nearObject.id === 'scoreboard') {
-      if (state.day >= 60 && !state.discoveredFFB) {
-        state.discoveredFFB = true;
-        showDialogue(
-          "SCOREBOARD INVESTIGATION",
-          "You inspect 14 game scoreboards closely.\nSpot #2 on all 14 boards is held by initials 'FFB'.\nThe scores are binary codes: 1, 10, 110, 1000, 1010...\n\nDecoding the binary order spells out:\nDONTTRUSTNAOMI!"
-        );
-      } else if (state.discoveredFFB) {
-        showDialogue("SCOREBOARD", "The binary message reads: DONTTRUSTNAOMI.");
-      } else {
-        showDialogue("SCOREBOARD", "High Score #1: MASTER_X\nHigh Score #2: FFB - 10101\nHigh Score #3: ACE");
-      }
-    }
-
-    else if (nearObject.id === 'naomi') {
-      if (!state.unlockedCabinet) {
-        showDialogue("N40M1 EXCHANGE COUNTER", "'Greetings challenger. Trade credits for survival.'", [
-          {
-            text: "Buy Meal Ticket (200 Credits)",
-            action: () => {
-              if (state.credits >= 200) {
-                state.credits -= 200;
-                updateHUD();
-                showDialogue("N40M1", "Meal purchased! You eat well.");
-              } else {
-                showDialogue("N40M1", "Insufficient credits!");
-              }
-            }
-          }
-        ]);
-      } else {
-        // Boss Battle Trigger
-        showDialogue("N40M1 CONFRONTATION", "You step up to N40M1: 'We know the truth, N40M1! We challenge you to beat us at every game in this arcade!'", [
-          {
-            text: "Begin Final Showdown!",
-            action: () => {
-              closeDialogue();
-              minigameTitle.innerText = "FINAL BOSS: N40M1 ARCADE SHOWDOWN";
-              startMinigame('boss');
-            }
-          }
-        ]);
-      }
-    }
-
-    else if (nearObject.id === 'secretCabinet') {
-      if (!state.unlockedCabinet) {
-        if (state.discoveredFFB) {
-          showDialogue("MYSTERIOUS CABINET", "The screen asks for a 14-digit override code.", [
-            {
-              text: "Enter: DONTTRUSTNAOMI",
-              action: () => {
-                state.unlockedCabinet = true;
-                state.timeDilation = true;
-                updateHUD();
-                showDialogue(
-                  "TERMINAL UNLOCKED (FFB)",
-                  "Screen flashes: 'I am FFB (Freddy Fazbear). You have been trapped here for OVER 10 YEARS due to N40M1's time dilation. The arcade machines hold trapped human souls.\n\nI have unlocked TIME DILATION (10% Speed Ability) for you! Go challenge N40M1 at the counter!'"
-                );
-              }
-            }
-          ]);
+function attackNaomi() {
+    const dmg = isFinalBoss ? 50 : 25;
+    bossHP -= dmg;
+    if (bossHP <= 0) {
+        closeModal('battle-modal');
+        if (isFinalBoss) {
+            triggerVictoryEnding();
         } else {
-          showDialogue("MYSTERIOUS CABINET", "A dark, unbranded cabinet. Requires a 14-digit override password...");
+            showNotification("Naomi backed off! Maintain hygiene!");
         }
-      } else {
-        showDialogue("MYSTERIOUS CABINET", "Terminal active. Time Dilation Ability Enabled. Go defeat N40M1!");
-      }
     }
-
-    else if (nearObject.id === 'bed') {
-      showDialogue("BEDROOM AREA", "Rest up and skip 30 days ahead?", [
-        {
-          text: "Sleep (+30 Days)",
-          action: () => {
-            state.day += 30;
-            state.tokens = 1000;
-            updateHUD();
-            closeDialogue();
-            if (state.day >= 60 && !state.discoveredFFB) {
-              showDialogue("TIME PASSES...", "Months pass. You begin noticing strange initials on the high scoreboards...");
-            }
-          }
-        }
-      ]);
-    }
-  }
+    updateBossUI();
 }
 
-// --- MAIN LOOP & RENDERING ---
-function update() {
-  if (!state.inDialogue && !state.activeMinigame) {
-    player.dx = 0;
-    player.dy = 0;
-
-    if (keys['w'] || keys['arrowup']) player.dy = -player.speed;
-    if (keys['s'] || keys['arrowdown']) player.dy = player.speed;
-    if (keys['a'] || keys['arrowleft']) player.dx = -player.speed;
-    if (keys['d'] || keys['arrowright']) player.dx = player.speed;
-
-    player.x += player.dx;
-    player.y += player.dy;
-
-    // Map Boundaries
-    player.x = Math.max(20, Math.min(760, player.x));
-    player.y = Math.max(20, Math.min(560, player.y));
-
-    checkInteractions();
-  }
+function updateBossUI() {
+    const max = isFinalBoss ? 1000 : 100;
+    const pct = Math.max(0, (bossHP / max) * 100);
+    document.getElementById('boss-hp-bar').style.width = `${pct}%`;
+    document.getElementById('boss-hp-text').innerText = `${Math.max(0, bossHP)} / ${max}`;
 }
 
-function draw() {
-  // Clear Main Canvas
-  ctx.fillStyle = '#0d0f12';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+function triggerVictoryEnding() {
+    playerStats.credits += 1000000000;
+    playerStats.updateUI();
 
-  // Draw Floor Tile Grid
-  ctx.strokeStyle = '#161b22';
-  ctx.lineWidth = 1;
-  for (let x = 0; x < canvas.width; x += 40) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, canvas.height);
-    ctx.stroke();
-  }
-  for (let y = 0; y < canvas.height; y += 40) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(canvas.width, y);
-    ctx.stroke();
-  }
+    document.getElementById('gameover-title').innerText = "VICTORY & ESCAPE!";
+    document.getElementById('gameover-title').style.color = "#00ff00";
+    document.getElementById('death-reason').innerHTML = `
+        <span style="color:#00ff00;">N40M1 EXPLODES IN NEON SPARKS!</span><br><br>
+        All trapped souls are released from the arcade cabinets and turn back into human beings.<br>
+        In the distance, you see 'FFB' step out... It's <strong>FREDDY FAZBEAR</strong>! He blows you a kiss and waves goodbye as everyone escapes!<br><br>
+        The time-dilation lifts: exactly 1 year has passed outside. You walk free with <strong>$1 BILLION CREDITS!</strong>
+    `;
+    document.getElementById('gameover-modal').classList.remove('hidden');
+}
 
-  // Draw Interactable Objects
-  interactables.forEach(obj => {
-    ctx.fillStyle = obj.color;
-    ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
-    
-    // Label text above object
-    ctx.fillStyle = '#e6edf3';
-    ctx.font = '11px Courier New';
-    ctx.textAlign = 'center';
-    ctx.fillText(obj.name, obj.x + obj.width / 2, obj.y - 8);
-  });
+// ==========================================
+// 4. SHOP & MACHINES
+// ==========================================
+const naomiShop = {
+    steak: { name: "Steak", cost: 50, type: "food", val: 40, color: "#ff7043" },
+    snack: { name: "Snack", cost: 15, type: "food", val: 15, color: "#ffca28" },
+    soap: { name: "Soap", cost: 30, type: "hygiene", val: 100, color: "#29b6f6" },
+    bed: { name: "Bed", cost: 200, type: "bed", val: 0, color: "#ab47bc" }
+};
 
-  // Draw Player
-  ctx.fillStyle = player.color;
-  ctx.shadowColor = '#50fa7b';
-  ctx.shadowBlur = 10;
-  ctx.fillRect(player.x, player.y, player.size, player.size);
-  ctx.shadowBlur = 0; // Reset shadow
+function buyFromNaomi(key) {
+    const item = naomiShop[key];
+    if (playerStats.credits < item.cost) { showNotification("Not enough credits!"); return; }
+    const emptyIdx = playerStats.hotbar.findIndex(s => s === null);
+    if (emptyIdx === -1) { showNotification("Hotbar full!"); return; }
 
-  // Floating Interact Hint
-  interactables.forEach(obj => {
-    const dist = Math.hypot((player.x + player.size/2) - (obj.x + obj.width/2), (player.y + player.size/2) - (obj.y + obj.height/2));
-    if (dist < 55) {
-      ctx.fillStyle = '#ff79c6';
-      ctx.font = 'bold 12px Courier New';
-      ctx.fillText('[E] INTERACT', obj.x + obj.width / 2, obj.y + obj.height + 18);
+    playerStats.credits -= item.cost;
+    playerStats.hotbar[emptyIdx] = { ...item };
+    playerStats.updateUI();
+    showNotification(`Bought ${item.name}! Check hotbar.`);
+}
+
+const machinePlays = {};
+function playMachine(name, cost, win) {
+    if ((machinePlays[name] || 0) >= 3) { showNotification("Machine out of order today! Sleep in bed."); return; }
+    if (playerStats.dailyTokens < cost) { showNotification("Not enough Tokens!"); return; }
+
+    playerStats.dailyTokens -= cost;
+    playerStats.energy = Math.max(0, playerStats.energy - 8);
+    machinePlays[name] = (machinePlays[name] || 0) + 1;
+    playerStats.credits += win;
+    playerStats.updateUI();
+    showNotification(`Played ${name}! +${win} Credits! Score: FFB [BINARY CLUE]`);
+}
+
+function resetMachinePlayLimits() { for (let k in machinePlays) machinePlays[k] = 0; }
+
+// ==========================================
+// 5. PLAYABLE MINIGAMES
+// ==========================================
+// Flappy Bird
+const fCtx = document.getElementById('flappyCanvas').getContext('2d');
+let fBird = { y: 180, vy: 0 }, fPipes = [], fScore = 0, fTimer = null;
+
+function startFlappy() {
+    if (playerStats.dailyTokens < 30) { showNotification("Need 30 Tokens!"); return; }
+    playerStats.dailyTokens -= 30; playerStats.updateUI();
+    document.getElementById('flappy-modal').classList.remove('hidden');
+    fBird.y = 180; fBird.vy = 0; fPipes = []; fScore = 0;
+    if (fTimer) clearInterval(fTimer);
+    fTimer = setInterval(runFlappy, 1000/60);
+}
+
+function runFlappy() {
+    fBird.vy += 0.4; fBird.y += fBird.vy;
+    if (fPipes.length === 0 || fPipes[fPipes.length - 1].x < 200) {
+        fPipes.push({ x: 360, top: Math.random() * 180 + 30, passed: false });
     }
-  });
+    fPipes.forEach(p => p.x -= 2.5);
+    fPipes.forEach(p => {
+        if (!p.passed && p.x < 60) { p.passed = true; fScore++; playerStats.credits += 15; playerStats.updateUI(); }
+        if (60 > p.x && 60 < p.x + 40 && (fBird.y < p.top || fBird.y > p.top + 110)) { clearInterval(fTimer); closeModal('flappy-modal'); }
+    });
+    fCtx.fillStyle = '#70c5ce'; fCtx.fillRect(0, 0, 360, 380);
+    fPipes.forEach(p => { fCtx.fillStyle = '#2e7d32'; fCtx.fillRect(p.x, 0, 40, p.top); fCtx.fillRect(p.x, p.top + 110, 40, 380); });
+    fCtx.fillStyle = '#ffca28'; fCtx.beginPath(); fCtx.arc(60, fBird.y, 12, 0, Math.PI*2); fCtx.fill();
+}
+
+// Cyber Dodge
+const dCtx = document.getElementById('dodgeCanvas').getContext('2d');
+let dPlayerX = 160, dObs = [], dScore = 0, dTimer = null;
+
+function startDodge() {
+    if (playerStats.dailyTokens < 30) { showNotification("Need 30 Tokens!"); return; }
+    playerStats.dailyTokens -= 30; playerStats.updateUI();
+    document.getElementById('dodge-modal').classList.remove('hidden');
+    dPlayerX = 160; dObs = []; dScore = 0;
+    if (dTimer) clearInterval(dTimer);
+    dTimer = setInterval(runDodge, 1000/60);
+}
+
+function runDodge() {
+    if (Math.random() < 0.05) dObs.push({ x: Math.random() * 320, y: 0, speed: Math.random() * 3 + 2 });
+    dObs.forEach(o => o.y += o.speed);
+    dObs.forEach((o, i) => {
+        if (o.y > 350 && Math.abs(o.x - dPlayerX) < 30) { clearInterval(dTimer); closeModal('dodge-modal'); }
+        if (o.y > 380) { dObs.splice(i, 1); dScore++; playerStats.credits += 10; playerStats.updateUI(); }
+    });
+    dCtx.fillStyle = '#050515'; dCtx.fillRect(0, 0, 360, 380);
+    dCtx.fillStyle = '#00d2ff'; dCtx.fillRect(dPlayerX, 340, 40, 20);
+    dCtx.fillStyle = '#ff0055'; dObs.forEach(o => dCtx.fillRect(o.x, o.y, 25, 25));
+}
+
+// Neon Catch
+const cCtx = document.getElementById('catchCanvas').getContext('2d');
+let cPaddleX = 150, cItems = [], cScore = 0, cTimer = null;
+
+function startCatch() {
+    if (playerStats.dailyTokens < 30) { showNotification("Need 30 Tokens!"); return; }
+    playerStats.dailyTokens -= 30; playerStats.updateUI();
+    document.getElementById('catch-modal').classList.remove('hidden');
+    cPaddleX = 150; cItems = []; cScore = 0;
+    if (cTimer) clearInterval(cTimer);
+    cTimer = setInterval(runCatch, 1000/60);
+}
+
+function runCatch() {
+    if (Math.random() < 0.04) cItems.push({ x: Math.random() * 330, y: 0 });
+    cItems.forEach(it => it.y += 3);
+    cItems.forEach((it, i) => {
+        if (it.y > 340 && it.x > cPaddleX - 10 && it.x < cPaddleX + 60) {
+            cItems.splice(i, 1); cScore++; playerStats.credits += 20; playerStats.updateUI();
+        } else if (it.y > 380) cItems.splice(i, 1);
+    });
+    cCtx.fillStyle = '#100515'; cCtx.fillRect(0, 0, 360, 380);
+    cCtx.fillStyle = '#ff0055'; cCtx.fillRect(cPaddleX, 350, 60, 15);
+    cCtx.fillStyle = '#ffcc00'; cItems.forEach(it => { cCtx.beginPath(); cCtx.arc(it.x, it.y, 8, 0, Math.PI*2); cCtx.fill(); });
+}
+
+// KEYBOARD CONTROLS
+window.addEventListener('keydown', e => {
+    if (e.code === 'Space') {
+        if (!document.getElementById('flappy-modal').classList.contains('hidden')) fBird.vy = -6.5;
+    }
+    if (e.key === 'a' || e.key === 'ArrowLeft') { dPlayerX = Math.max(0, dPlayerX - 18); cPaddleX = Math.max(0, cPaddleX - 18); }
+    if (e.key === 'd' || e.key === 'ArrowRight') { dPlayerX = Math.min(320, dPlayerX + 18); cPaddleX = Math.min(300, cPaddleX + 18); }
+    if (e.key >= '1' && e.key <= '9') selectSlot(parseInt(e.key) - 1);
+    if (e.key.toLowerCase() === 'e') checkInteraction();
+});
+
+// ==========================================
+// 6. RENDER WORLD & CANVAS GRAPHICS
+// ==========================================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize); resize();
+
+const player = { x: 600, y: 500, w: 80, h: 80, speed: 7.5 };
+
+const worldObjects = [
+    { id: 'naomi', name: "Naomi's Counter", x: 600, y: 80, w: 360, h: 140 },
+    { id: 'flappy', name: "FLAPPY BIRD", x: 100, y: 260, w: 160, h: 240, color: '#ffca28' },
+    { id: 'dodge', name: "CYBER DODGE", x: 300, y: 260, w: 160, h: 240, color: '#00d2ff' },
+    { id: 'catch', name: "NEON CATCH", x: 500, y: 260, w: 160, h: 240, color: '#ff0055' },
+
+    { id: 'm1', name: "Dig Dug", x: 100, y: 560, w: 160, h: 240, color: '#2196f3', cost: 10, win: 20 },
+    { id: 'm2', name: "OutRun 2", x: 300, y: 560, w: 160, h: 240, color: '#e91e63', cost: 10, win: 25 },
+    { id: 'm3', name: "NBA Hoops", x: 500, y: 560, w: 160, h: 240, color: '#9c27b0', cost: 10, win: 30 },
+    { id: 'm4', name: "Time Crisis", x: 700, y: 560, w: 160, h: 240, color: '#ff9800', cost: 10, win: 35 },
+
+    { id: 'cursed', name: "Cursed Cabinet", x: 700, y: 260, w: 160, h: 240, color: '#ff0000' },
+    { id: 'terminal', name: "Secret Terminal", x: 1100, y: 100, w: 140, h: 140 }
+];
+
+const keys = {};
+window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+function checkDistanceToNaomi() {
+    return Math.hypot((player.x + 40) - (600 + 180), (player.y + 40) - (80 + 70));
+}
+
+function checkInteraction() {
+    if (useSelectedItem()) return;
+
+    let near = null;
+    worldObjects.forEach(obj => {
+        const dist = Math.hypot((obj.x + obj.w/2) - (player.x + player.w/2), (obj.y + obj.h/2) - (player.y + player.h/2));
+        if (dist < 180) near = obj;
+    });
+
+    if (playerStats.placedBed) {
+        const bed = playerStats.placedBed;
+        const distBed = Math.hypot((bed.x + bed.w/2) - (player.x + player.w/2), (bed.y + bed.h/2) - (player.y + player.h/2));
+        if (distBed < 180) {
+            playerStats.sleep();
+            return;
+        }
+    }
+
+    if (!near) return;
+    if (near.id === 'naomi') document.getElementById('shop-modal').classList.remove('hidden');
+    else if (near.id === 'flappy') startFlappy();
+    else if (near.id === 'dodge') startDodge();
+    else if (near.id === 'catch') startCatch();
+    else if (near.id === 'cursed') document.getElementById('cursed-modal').classList.remove('hidden');
+    else if (near.id.startsWith('m')) playMachine(near.name, near.cost, near.win);
+    else if (near.id === 'terminal') document.getElementById('terminal-modal').classList.remove('hidden');
+}
+
+function drawArcadeCabinet(obj) {
+    ctx.fillStyle = '#15151e'; ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
+    ctx.strokeStyle = obj.color; ctx.lineWidth = 6; ctx.strokeRect(obj.x, obj.y, obj.w, obj.h);
+
+    ctx.fillStyle = obj.color; ctx.fillRect(obj.x + 10, obj.y + 10, obj.w - 20, 36);
+    ctx.fillStyle = '#000'; ctx.font = 'bold 12px Courier New'; ctx.textAlign = 'center';
+    ctx.fillText(obj.id === 'cursed' ? "FFB SCORE" : "ARCADE", obj.x + obj.w/2, obj.y + 32);
+
+    ctx.fillStyle = obj.id === 'cursed' ? '#330000' : '#0a0a12';
+    ctx.fillRect(obj.x + 15, obj.y + 55, obj.w - 30, 85);
+    ctx.fillStyle = obj.color; ctx.globalAlpha = 0.35;
+    ctx.fillRect(obj.x + 20, obj.y + 60, obj.w - 40, 75);
+    ctx.globalAlpha = 1.0;
+
+    ctx.fillStyle = '#222'; ctx.fillRect(obj.x + 10, obj.y + 155, obj.w - 20, 45);
+    ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.arc(obj.x + 35, obj.y + 178, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffff00'; ctx.beginPath(); ctx.arc(obj.x + 85, obj.y + 178, 8, 0, Math.PI * 2); ctx.arc(obj.x + 115, obj.y + 178, 8, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawNaomiCounter(obj) {
+    ctx.fillStyle = '#5c3a21'; ctx.fillRect(obj.x, obj.y + 40, obj.w, obj.h - 40);
+    ctx.fillStyle = '#8b5a2b'; ctx.fillRect(obj.x - 12, obj.y + 25, obj.w + 24, 25);
+
+    ctx.fillStyle = '#e91e63'; ctx.beginPath(); ctx.arc(obj.x + obj.w/2, obj.y - 10, 36, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffdbac'; ctx.beginPath(); ctx.arc(obj.x + obj.w/2, obj.y - 4, 26, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = '#ffcc00'; ctx.font = 'bold 18px Courier New'; ctx.textAlign = 'center';
+    ctx.fillText("N40M1 COUNTER", obj.x + obj.w/2, obj.y + 85);
+}
+
+function drawTerminal(obj) {
+    ctx.fillStyle = '#222'; ctx.fillRect(obj.x, obj.y + 50, obj.w, obj.h - 50);
+    ctx.fillStyle = '#002200'; ctx.fillRect(obj.x + 12, obj.y, obj.w - 24, 60);
+    ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 4; ctx.strokeRect(obj.x + 12, obj.y, obj.w - 24, 60);
+    ctx.fillStyle = '#00ff00'; ctx.font = 'bold 12px Courier New'; ctx.textAlign = 'center';
+    ctx.fillText(">_1000 CR", obj.x + obj.w/2, obj.y + 36);
+}
+
+function drawPlacedBed(bed) {
+    ctx.fillStyle = '#4a2e18'; ctx.fillRect(bed.x, bed.y, bed.w, bed.h);
+    ctx.fillStyle = '#2196f3'; ctx.fillRect(bed.x + 10, bed.y + 25, bed.w - 20, bed.h - 35);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(bed.x + 15, bed.y + 8, bed.w - 30, 20);
+
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 14px Courier New'; ctx.textAlign = 'center';
+    ctx.fillText("BED (Press E)", bed.x + bed.w / 2, bed.y - 10);
+}
+
+function drawPlayerSprite() {
+    const px = player.x, py = player.y;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(px + 40, py + 72, 32, 12, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#00ffcc'; ctx.fillRect(px + 18, py + 30, 44, 34);
+    ctx.fillStyle = '#111122'; ctx.fillRect(px + 22, py + 64, 14, 16); ctx.fillRect(px + 44, py + 64, 14, 16);
+    ctx.fillStyle = '#ffdbac'; ctx.fillRect(px + 22, py + 8, 36, 26);
+    ctx.fillStyle = '#3e2723'; ctx.fillRect(px + 18, py + 2, 44, 12);
+    ctx.fillStyle = '#000'; ctx.fillRect(px + 28, py + 18, 5, 6); ctx.fillRect(px + 46, py + 18, 5, 6);
+}
+
+function drawWorld() {
+    ctx.fillStyle = '#0a0a10'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = '#181826'; ctx.lineWidth = 2;
+    for (let x = 0; x < canvas.width; x += 80) {
+        for (let y = 0; y < canvas.height; y += 80) ctx.strokeRect(x, y, 80, 80);
+    }
+
+    worldObjects.forEach(obj => {
+        if (obj.id === 'naomi') drawNaomiCounter(obj);
+        else if (obj.id === 'terminal') drawTerminal(obj);
+        else drawArcadeCabinet(obj);
+
+        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 14px Courier New'; ctx.textAlign = 'center';
+        ctx.fillText(obj.name, obj.x + obj.w / 2, obj.y - 12);
+    });
+
+    if (playerStats.placedBed) drawPlacedBed(playerStats.placedBed);
+    drawPlayerSprite();
 }
 
 function gameLoop() {
-  update();
-  draw();
-  requestAnimationFrame(gameLoop);
-}
-
-// --- MINIGAME 1: FLAPPY BIRD ARCADE ---
-let flappyY, flappyVelocity, pipes, flappyScore;
-
-function initFlappyGame() {
-  flappyY = 200;
-  flappyVelocity = 0;
-  pipes = [];
-  flappyScore = 0;
-  loopFlappy();
-}
-
-function loopFlappy() {
-  if (state.activeMinigame !== 'flappy') return;
-
-  // Apply Time Dilation if active
-  const gravity = state.timeDilation ? 0.08 : 0.4;
-  const jumpSpeed = state.timeDilation ? -3 : -7;
-
-  flappyVelocity += gravity;
-  flappyY += flappyVelocity;
-
-  if (keys[' '] || keys['arrowup']) {
-    keys[' '] = false;
-    keys['arrowup'] = false;
-    flappyVelocity = jumpSpeed;
-  }
-
-  // Spawn Pipes
-  if (Math.random() < 0.02) {
-    const gap = 120;
-    const topHeight = Math.random() * 200 + 30;
-    pipes.push({ x: 600, top: topHeight, bottom: topHeight + gap, passed: false });
-  }
-
-  // Clear & Draw
-  miniCtx.fillStyle = '#05070a';
-  miniCtx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
-
-  // Draw Bird
-  miniCtx.fillStyle = '#f1fa8c';
-  miniCtx.fillRect(100, flappyY, 20, 20);
-
-  // Move & Draw Pipes
-  miniCtx.fillStyle = '#50fa7b';
-  pipes.forEach((p, idx) => {
-    p.x -= 2;
-    miniCtx.fillRect(p.x, 0, 40, p.top);
-    miniCtx.fillRect(p.x, p.bottom, 40, miniCanvas.height - p.bottom);
-
-    if (!p.passed && p.x < 100) {
-      p.passed = true;
-      flappyScore += 100;
+    if (!playerStats.isDead) {
+        if (keys['w'] || keys['arrowup']) player.y = Math.max(20, player.y - player.speed);
+        if (keys['s'] || keys['arrowdown']) player.y = Math.min(canvas.height - player.h - 20, player.y + player.speed);
+        if (keys['a'] || keys['arrowleft']) player.x = Math.max(20, player.x - player.speed);
+        if (keys['d'] || keys['arrowright']) player.x = Math.min(canvas.width - player.w - 20, player.x + player.speed);
     }
-
-    // Collision Check
-    if (p.x < 120 && p.x + 40 > 100) {
-      if (flappyY < p.top || flappyY + 20 > p.bottom) {
-        // Game Over
-        state.credits += flappyScore;
-        updateHUD();
-        alert(`Game Over! Earned ${flappyScore} Credits.`);
-        closeMinigame();
-        return;
-      }
-    }
-  });
-
-  // Clean old pipes
-  pipes = pipes.filter(p => p.x > -50);
-
-  // Score HUD
-  miniCtx.fillStyle = '#fff';
-  miniCtx.font = '16px Courier New';
-  miniCtx.fillText(`Score: ${flappyScore}`, 20, 30);
-
-  requestAnimationFrame(loopFlappy);
+    drawWorld();
+    requestAnimationFrame(gameLoop);
 }
 
-// --- MINIGAME 2: SPACE DEFENDER ---
-let shipX, bullets, aliens, invaderScore;
-
-function initInvadersGame() {
-  shipX = 280;
-  bullets = [];
-  aliens = [];
-  invaderScore = 0;
-
-  for (let r = 0; r < 3; r++) {
-    for (let c = 0; c < 8; c++) {
-      aliens.push({ x: 80 + c * 60, y: 40 + r * 40, alive: true });
-    }
-  }
-
-  loopInvaders();
-}
-
-function loopInvaders() {
-  if (state.activeMinigame !== 'invaders') return;
-
-  const moveSpeed = state.timeDilation ? 8 : 5;
-
-  if (keys['a'] || keys['arrowleft']) shipX -= moveSpeed;
-  if (keys['d'] || keys['arrowright']) shipX += moveSpeed;
-  shipX = Math.max(10, Math.min(570, shipX));
-
-  if (keys[' '] || keys['arrowup']) {
-    keys[' '] = false;
-    keys['arrowup'] = false;
-    bullets.push({ x: shipX + 10, y: 350 });
-  }
-
-  // Clear
-  miniCtx.fillStyle = '#05070a';
-  miniCtx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
-
-  // Draw Ship
-  miniCtx.fillStyle = '#8be9fd';
-  miniCtx.fillRect(shipX, 360, 20, 20);
-
-  // Bullets
-  miniCtx.fillStyle = '#ff79c6';
-  bullets.forEach(b => {
-    b.y -= 7;
-    miniCtx.fillRect(b.x, b.y, 4, 10);
-  });
-
-  // Aliens
-  let remaining = 0;
-  aliens.forEach(a => {
-    if (a.alive) {
-      remaining++;
-      miniCtx.fillStyle = '#ff5555';
-      miniCtx.fillRect(a.x, a.y, 30, 20);
-
-      // Bullet collision
-      bullets.forEach(b => {
-        if (b.x > a.x && b.x < a.x + 30 && b.y > a.y && b.y < a.y + 20) {
-          a.alive = false;
-          invaderScore += 150;
-        }
-      });
-    }
-  });
-
-  if (remaining === 0) {
-    state.credits += invaderScore;
-    updateHUD();
-    alert(`Stage Cleared! Earned ${invaderScore} Credits.`);
-    closeMinigame();
-    return;
-  }
-
-  requestAnimationFrame(loopInvaders);
-}
-
-// --- MINIGAME 3: FINAL BOSS BATTLE VS N40M1 ---
-let bossHealth = 100;
-let playerHealth = 100;
-
-function initBossBattle() {
-  bossHealth = 100;
-  playerHealth = 100;
-  loopBoss();
-}
-
-function loopBoss() {
-  if (state.activeMinigame !== 'boss') return;
-
-  miniCtx.fillStyle = '#05070a';
-  miniCtx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
-
-  // Draw N40M1
-  miniCtx.fillStyle = '#ff5555';
-  miniCtx.fillRect(250, 50, 100, 100);
-  miniCtx.fillStyle = '#fff';
-  miniCtx.font = '14px Courier New';
-  miniCtx.fillText("N40M1 CORE", 260, 100);
-
-  // Health Bars
-  miniCtx.fillStyle = '#ff5555';
-  miniCtx.fillRect(50, 20, bossHealth * 5, 15);
-  miniCtx.fillStyle = '#50fa7b';
-  miniCtx.fillRect(50, 360, playerHealth * 5, 15);
-
-  miniCtx.fillStyle = '#fff';
-  miniCtx.fillText(`N40M1: ${bossHealth}%`, 50, 15);
-  miniCtx.fillText(`YOU: ${playerHealth}%`, 50, 355);
-
-  // Instruction Prompt
-  miniCtx.fillStyle = '#8be9fd';
-  miniCtx.fillText("PRESS [SPACEBAR] TO HIT WITH 10% TIME DILATION!", 100, 220);
-
-  if (keys[' ']) {
-    keys[' '] = false;
-    // With time dilation active, player crushes N40M1
-    const damage = state.timeDilation ? 25 : 5;
-    bossHealth -= damage;
-    playerHealth -= 2;
-
-    if (bossHealth <= 0) {
-      closeMinigame();
-      showDialogue(
-        "VICTORY!",
-        "With Time Dilation active, your precision overwhelms N40M1!\n\nN40M1 SHUDDERS AND EXPLODES!\n\nThe arcade machines transform back into thousands of human souls. Freddy Fazbear (FFB) waves goodbye as everyone vanishes home.\n\nThe doors open—exactly 1 real-world year has passed. You claim your $1 Billion!"
-      );
-      return;
-    }
-  }
-
-  requestAnimationFrame(loopBoss);
-}
-
-// Launch Game Loop
-updateHUD();
-gameLoop();
+playerStats.updateUI();
+requestAnimationFrame(gameLoop);
