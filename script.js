@@ -1,24 +1,15 @@
 // ==========================================
-// 1. PLAYER STATS & SURVIVAL SYSTEM
+// 1. PLAYER STATS & SURVIVAL ENGINE
 // ==========================================
 const playerStats = {
-    hunger: 100,
-    maxHunger: 100,
-    energy: 100,
-    maxEnergy: 100,
-    hygiene: 100,
-    maxHygiene: 100,
-    dailyTokens: 1000,
-    credits: 0,
-    
-    // Minecraft 9-slot Hotbar (index 0 to 8)
-    hotbar: new Array(9).fill(null), 
-    selectedSlot: 0, // Starts on slot 1 (index 0)
-    
+    hunger: 100, maxHunger: 100,
+    energy: 100, maxEnergy: 100,
+    hygiene: 100, maxHygiene: 100,
+    dailyTokens: 1000, credits: 0,
+    hotbar: new Array(9).fill(null),
+    selectedSlot: 0,
     hasBedPlaced: false,
-    timeDilationActive: false,
 
-    // Decay stats over time
     decay() {
         this.hunger = Math.max(0, this.hunger - 0.5);
         const energyLoss = this.hygiene < 20 ? 1.0 : 0.5;
@@ -36,13 +27,7 @@ const playerStats = {
         this.dailyTokens = 1000;
         resetMachinePlayLimits();
         this.updateUI();
-        showNotification("Slept! Energy & Tokens restored.");
-    },
-
-    toggleTimeDilation() {
-        this.timeDilationActive = !this.timeDilationActive;
-        showNotification(`Time Dilation (0.1x): ${this.timeDilationActive ? "ON" : "OFF"}`);
-        return this.timeDilationActive;
+        showNotification("Slept well! Energy & Daily Tokens fully restored.");
     },
 
     updateUI() {
@@ -61,22 +46,15 @@ const playerStats = {
         this.renderHotbarUI();
     },
 
-    // Renders the 9 Minecraft Hotbar Slots
     renderHotbarUI() {
         for (let i = 0; i < 9; i++) {
             const slotElement = document.getElementById(`hotbar-slot-${i + 1}`);
             if (!slotElement) continue;
 
             const item = this.hotbar[i];
+            if (i === this.selectedSlot) slotElement.classList.add('selected');
+            else slotElement.classList.remove('selected');
 
-            // Highlight selected slot
-            if (i === this.selectedSlot) {
-                slotElement.classList.add('selected');
-            } else {
-                slotElement.classList.remove('selected');
-            }
-
-            // Display item icon/text inside slot
             if (item) {
                 slotElement.innerHTML = `<span class="slot-num">${i + 1}</span><img src="${item.icon}" alt="${item.name}" class="item-icon">`;
             } else {
@@ -86,100 +64,62 @@ const playerStats = {
     }
 };
 
-setInterval(() => {
-    playerStats.decay();
-}, 2000);
-
+setInterval(() => { playerStats.decay(); }, 2000);
 
 // ==========================================
-// 2. ON-SCREEN NOTIFICATION SYSTEM (MIDDLE OF SCREEN)
+// 2. NOTIFICATION SYSTEM & HOTBAR (KEYS 1-9 & E)
 // ==========================================
 function showNotification(message, duration = 2500) {
     let notifyBox = document.getElementById('center-notification');
-    
-    // Create element if it doesn't exist in HTML yet
-    if (!notifyBox) {
-        notifyBox = document.createElement('div');
-        notifyBox.id = 'center-notification';
-        document.body.appendChild(notifyBox);
-    }
-
+    if (!notifyBox) return;
     notifyBox.innerText = message;
     notifyBox.classList.add('show');
-
-    // Hide notification after duration
-    setTimeout(() => {
-        notifyBox.classList.remove('show');
-    }, duration);
+    setTimeout(() => { notifyBox.classList.remove('show'); }, duration);
 }
 
-
-// ==========================================
-// 3. HOTBAR CONTROLS & ITEM USAGE (KEYS 1-9)
-// ==========================================
-
-// Listen for keys 1 through 9
 window.addEventListener('keydown', (e) => {
     const keyNum = parseInt(e.key);
-    if (keyNum >= 1 && keyNum <= 9) {
-        selectHotbarSlot(keyNum - 1);
-    }
+    if (keyNum >= 1 && keyNum <= 9) selectHotbarSlot(keyNum - 1);
+    if (e.key.toLowerCase() === 'e') checkWorldInteraction();
 });
 
 function selectHotbarSlot(slotIndex) {
     playerStats.selectedSlot = slotIndex;
     playerStats.updateUI();
-
     const currentItem = playerStats.hotbar[slotIndex];
-    if (currentItem) {
-        showNotification(`Selected Slot ${slotIndex + 1}: ${currentItem.name}`);
-    } else {
-        showNotification(`Selected Slot ${slotIndex + 1}: Empty`);
-    }
+    if (currentItem) showNotification(`Selected: ${currentItem.name}`);
 }
 
-// Use item currently held in selected hotbar slot
 function useHeldItem() {
     const index = playerStats.selectedSlot;
     const item = playerStats.hotbar[index];
-
-    if (!item) {
-        showNotification("Nothing in selected slot!");
-        return;
-    }
+    if (!item) { showNotification("Nothing in selected slot!"); return; }
 
     if (item.type === "food") {
         playerStats.hunger = Math.min(playerStats.maxHunger, playerStats.hunger + item.val);
         showNotification(`Ate ${item.name}! +${item.val} Hunger.`);
-        playerStats.hotbar[index] = null; // Consume item
-    } 
-    else if (item.type === "hygiene") {
+        playerStats.hotbar[index] = null;
+    } else if (item.type === "hygiene") {
         playerStats.hygiene = playerStats.maxHygiene;
         showNotification(`Used ${item.name}! Hygiene restored.`);
-        playerStats.hotbar[index] = null; // Consume item
-    } 
-    else if (item.type === "bed") {
-        if (playerStats.hasBedPlaced) {
-            showNotification("You already have a bed set up!");
-            return;
-        }
+        playerStats.hotbar[index] = null;
+    } else if (item.type === "bed") {
+        if (playerStats.hasBedPlaced) { showNotification("Bed already placed!"); return; }
         playerStats.hasBedPlaced = true;
-        showNotification("Bed placed! You can now Sleep anytime.");
-        playerStats.hotbar[index] = null; // Consume item
+        showNotification("Bed placed in your room! Walk to it and press E to Sleep.");
+        playerStats.hotbar[index] = null;
     }
-
     playerStats.updateUI();
 }
 
-
 // ==========================================
-// 4. NAOMI PRIZE COUNTER
+// 3. SHOP & MACHINE LOGIC
 // ==========================================
 const naomiShop = {
-    steak:   { name: "Steak", cost: 50, type: "food", val: 40, icon: "https://img.icons8.com/color/48/steak.png" },
-    snack:   { name: "Snack", cost: 15, type: "food", val: 15, icon: "https://img.icons8.com/color/48/potato-chips.png" },
-    soap:    { name: "Soap", cost: 30, type: "hygiene", val: 100, icon: "https://img.icons8.com/color/48/soap.png" },
-    bed:     { name: "Bed", cost: 200, type: "bed", val: 0, icon: "https://img.icons8.com/color/48/bed.png" }
+    steak: { name: "Steak", cost: 50, type: "food", val: 40, icon: "https://img.icons8.com/color/48/steak.png" },
+    snack: { name: "Snack", cost: 15, type: "food", val: 15, icon: "https://img.icons8.com/color/48/potato-chips.png" },
+    soap: { name: "Soap", cost: 30, type: "hygiene", val: 100, icon: "https://img.icons8.com/color/48/soap.png" },
+    bed: { name: "Bed", cost: 200, type: "bed", val: 0, icon: "https://img.icons8.com/color/48/bed.png" }
 };
 
 function buyFromNaomi(itemKey) {
@@ -191,7 +131,6 @@ function buyFromNaomi(itemKey) {
         return;
     }
 
-    // Find first empty hotbar slot
     const emptyIndex = playerStats.hotbar.findIndex(slot => slot === null);
     if (emptyIndex === -1) {
         showNotification("Hotbar full! Clear a slot first.");
@@ -204,86 +143,153 @@ function buyFromNaomi(itemKey) {
     playerStats.updateUI();
 }
 
-
-// ==========================================
-// 5. MACHINE PLAY & WIN SYSTEM
-// ==========================================
-const machinePlays = {}; 
+const machinePlays = {};
 const MAX_PLAYS_PER_DAY = 3;
 
-function playMachine(machineId, tokenCost) {
+function playMachine(machineId, tokenCost, rewardCredits) {
     if (!machinePlays[machineId]) machinePlays[machineId] = 0;
 
     if (machinePlays[machineId] >= MAX_PLAYS_PER_DAY) {
-        showNotification("OUT OF ORDER today! Sleep to reset.");
-        return false;
+        showNotification("OUT OF ORDER today! Go sleep in your bed.");
+        return;
     }
-
     if (playerStats.dailyTokens < tokenCost) {
         showNotification("Not enough daily tokens!");
-        return false;
+        return;
     }
-
     if (playerStats.energy < 10) {
-        showNotification("Too tired to play! Sleep in your bed.");
-        return false;
+        showNotification("Too tired to play! Go sleep.");
+        return;
     }
 
     playerStats.dailyTokens -= tokenCost;
     playerStats.energy = Math.max(0, playerStats.energy - 10);
     playerStats.hygiene = Math.max(0, playerStats.hygiene - 5);
     machinePlays[machineId]++;
-    
-    playerStats.updateUI();
-    return true;
-}
+    playerStats.credits += rewardCredits;
 
-function completeMinigame(creditsWon) {
-    playerStats.credits += creditsWon;
     playerStats.updateUI();
-    showNotification(`YOU WON! +${creditsWon} Credits!`);
+    showNotification(`Played ${machineId}! Won +${rewardCredits} Credits!`);
 }
 
 function resetMachinePlayLimits() {
-    for (let machine in machinePlays) {
-        machinePlays[machine] = 0;
-    }
+    for (let m in machinePlays) machinePlays[m] = 0;
 }
 
+function closeShopModal() { document.getElementById('shop-modal').classList.add('hidden'); }
+function closeTerminalModal() { document.getElementById('terminal-modal').classList.add('hidden'); }
 
-// ==========================================
-// 6. SECRET TERMINAL & BOSS SHOWDOWN
-// ==========================================
 function enterSecretTerminalPassword(inputPassword) {
     const cleanPassword = inputPassword.replace(/[^a-zA-Z]/g, "").toUpperCase();
-
     if (cleanPassword === "DONTTRUSTNAOMI") {
-        showNotification("ACCESS GRANTED: Challenge Naomi to a 1,000-game showdown!");
-        startBossShowdown();
+        showNotification("ACCESS GRANTED: Challenge Naomi to 1,000 games!");
+        closeTerminalModal();
     } else {
         showNotification("INCORRECT PASSWORD.");
     }
 }
 
-const bossMatch = { active: false, playerWins: 0, naomiWins: 0 };
+// ==========================================
+// 4. 2D CANVAS ARCADE WORLD & CHARACTER ENGINE
+// ==========================================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
 
-function startBossShowdown() {
-    bossMatch.active = true;
-    showNotification("SHOWDOWN STARTED! Beat Naomi!");
+const player = { x: 400, y: 300, width: 24, height: 24, speed: 3.5, color: '#00ffcc' };
+
+const worldObjects = [
+    { id: 'naomi', name: "Naomi Counter", x: 350, y: 50, w: 100, h: 40, color: '#e91e63' },
+    { id: 'machine1', name: "Machine #1", x: 100, y: 150, w: 50, h: 60, color: '#2196f3', cost: 100, win: 50 },
+    { id: 'machine2', name: "Machine #2", x: 200, y: 150, w: 50, h: 60, color: '#9c27b0', cost: 100, win: 75 },
+    { id: 'terminal', name: "Secret Terminal", x: 650, y: 80, w: 40, h: 50, color: '#00ff00' },
+    { id: 'bed', name: "Bed", x: 700, y: 400, w: 60, h: 60, color: '#ff9800' }
+];
+
+const keys = {};
+window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
+window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+
+function updateMovement() {
+    if (keys['w'] || keys['arrowup']) player.y = Math.max(10, player.y - player.speed);
+    if (keys['s'] || keys['arrowdown']) player.y = Math.min(canvas.height - player.height - 10, player.y + player.speed);
+    if (keys['a'] || keys['arrowleft']) player.x = Math.max(10, player.x - player.speed);
+    if (keys['d'] || keys['arrowright']) player.x = Math.min(canvas.width - player.width - 10, player.x + player.speed);
 }
 
-function recordBossGameResult(playerWon) {
-    if (!bossMatch.active) return;
+function checkWorldInteraction() {
+    let nearestObj = null;
+    let minDist = 60; // Interaction distance
 
-    if (playerWon) bossMatch.playerWins++;
-    else bossMatch.naomiWins++;
+    worldObjects.forEach(obj => {
+        const cx = obj.x + obj.w / 2;
+        const cy = obj.y + obj.h / 2;
+        const px = player.x + player.width / 2;
+        const py = player.y + player.height / 2;
+        const dist = Math.hypot(cx - px, cy - py);
 
-    if (bossMatch.naomiWins > 100) {
-        showNotification("GAME OVER: Soul trapped in DDR machine forever.");
-        location.reload();
-    } else if (bossMatch.playerWins + bossMatch.naomiWins >= 1000 && bossMatch.playerWins > bossMatch.naomiWins) {
-        playerStats.credits += 1000000000;
-        playerStats.updateUI();
-        showNotification("VICTORY! Naomi exploded! You won $1,000,000,000!");
+        if (dist < minDist) nearestObj = obj;
+    });
+
+    if (!nearestObj) {
+        useHeldItem(); // If not near an object, use selected hotbar item!
+        return;
+    }
+
+    if (nearestObj.id === 'naomi') {
+        document.getElementById('shop-modal').classList.remove('hidden');
+    } else if (nearestObj.id === 'machine1' || nearestObj.id === 'machine2') {
+        playMachine(nearestObj.name, nearestObj.cost, nearestObj.win);
+    } else if (nearestObj.id === 'terminal') {
+        document.getElementById('terminal-modal').classList.remove('hidden');
+    } else if (nearestObj.id === 'bed') {
+        playerStats.sleep();
     }
 }
+
+function drawWorld() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw Floor Tiles Pattern
+    ctx.strokeStyle = '#222233';
+    for (let x = 0; x < canvas.width; x += 40) {
+        for (let y = 0; y < canvas.height; y += 40) {
+            ctx.strokeRect(x, y, 40, 40);
+        }
+    }
+
+    // Draw Objects & Labels
+    worldObjects.forEach(obj => {
+        if (obj.id === 'bed' && !playerStats.hasBedPlaced) return; // Only draw bed if placed!
+
+        ctx.fillStyle = obj.color;
+        ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '10px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText(obj.name, obj.x + obj.w / 2, obj.y - 6);
+    });
+
+    // Draw Player Character
+    ctx.fillStyle = player.color;
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+    
+    // Player head outline
+    ctx.strokeStyle = '#ffffff';
+    ctx.strokeRect(player.x, player.y, player.width, player.height);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '10px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText("YOU", player.x + player.width / 2, player.y - 6);
+}
+
+function gameLoop() {
+    updateMovement();
+    drawWorld();
+    requestAnimationFrame(gameLoop);
+}
+
+// Start Game Loop & Initialize UI
+playerStats.updateUI();
+requestAnimationFrame(gameLoop);
