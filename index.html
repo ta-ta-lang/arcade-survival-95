@@ -28,9 +28,9 @@
         </div>
     </div>
 
-    <p class="controls-hint">WASD / Arrows = Move | E = Interact | 1-9 = Hotbar | Keep Hygiene > 15 so Naomi doesn't fight you!</p>
+    <p class="controls-hint">WASD / Arrows = Move | E = Interact / Place Bed | 1-9 = Select Item | Keep Hygiene > 15!</p>
 
-    <!-- CANVAS WORLD -->
+    <!-- GAME CANVAS -->
     <canvas id="gameCanvas"></canvas>
 
     <!-- FLAPPY BIRD MODAL -->
@@ -43,7 +43,7 @@
         </div>
     </div>
 
-    <!-- PLAYABLE MINIGAME 1: CYBER DODGE -->
+    <!-- CYBER DODGE MODAL -->
     <div id="dodge-modal" class="modal hidden">
         <div class="modal-content">
             <h3 style="color: #00d2ff;">CYBER DODGE</h3>
@@ -53,13 +53,25 @@
         </div>
     </div>
 
-    <!-- PLAYABLE MINIGAME 2: NEON CATCH -->
+    <!-- NEON CATCH MODAL -->
     <div id="catch-modal" class="modal hidden">
         <div class="modal-content">
             <h3 style="color: #ff0055;">NEON CATCH</h3>
             <p style="font-size: 13px; margin-bottom: 10px; color: #ff0055;">Catch falling energy stars!</p>
             <canvas id="catchCanvas" width="360" height="380"></canvas>
             <button class="btn btn-action" onclick="closeModal('catch-modal')">Quit</button>
+        </div>
+    </div>
+
+    <!-- CURSED MACHINE HINT MODAL -->
+    <div id="cursed-modal" class="modal hidden">
+        <div class="modal-content" style="border-color: #ff0000; box-shadow: 0 0 25px rgba(255, 0, 0, 0.6);">
+            <h3 style="color: #ff0000;">??? CURSED MACHINE ???</h3>
+            <p style="font-size: 14px; color: #ff6666; margin: 15px 0; line-height: 1.5;">
+                The screen flickers aggressively with blood-red text:<br><br>
+                <strong style="color: #fff; background: #990000; padding: 4px 8px; border-radius: 4px;">"THE CODE TO UNLOCK HER TRUE FORM IS: DONTTRUSTNAOMI"</strong>
+            </p>
+            <button class="btn btn-action" onclick="closeModal('cursed-modal')">Step Away</button>
         </div>
     </div>
 
@@ -87,7 +99,7 @@
         </div>
     </div>
 
-    <!-- NAOMI BOSS / ENFORCEMENT BATTLE MODAL -->
+    <!-- BATTLE MODAL -->
     <div id="battle-modal" class="modal hidden">
         <div class="modal-content battle-card">
             <h2 id="battle-title" style="color: #ff0055;">NAOMI ENFORCEMENT BATTLE</h2>
@@ -98,7 +110,7 @@
         </div>
     </div>
 
-    <!-- GAME OVER / DIED MODAL -->
+    <!-- GAME OVER MODAL -->
     <div id="gameover-modal" class="modal hidden">
         <div class="modal-content" style="border-color: #ff0000;">
             <h1 style="color: #ff0000; font-size: 28px;">GAME OVER</h1>
