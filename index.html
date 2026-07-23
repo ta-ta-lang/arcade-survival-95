@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ARCADE SURVIVAL '95 - Online Edition</title>
+    <title>ARCADE SURVIVAL '95 - HD Edition</title>
     <style>
+        * { box-sizing: border-box; }
         body {
-            background-color: #0d0d11;
+            background-color: #050508;
             color: #00ffcc;
             font-family: 'Courier New', Courier, monospace;
             display: flex;
@@ -17,255 +18,429 @@
             height: 100vh;
             overflow: hidden;
         }
+        h1 {
+            color: #ff0055;
+            text-shadow: 0 0 10px #ff0055, 2px 2px #00ffcc;
+            margin: 0 0 5px 0;
+            letter-spacing: 2px;
+            font-size: 24px;
+        }
+        p.subtitle {
+            margin: 0 0 15px 0;
+            color: #8a8aab;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
         #game-container {
             position: relative;
             border: 4px solid #ff0055;
-            box-shadow: 0 0 25px #ff0055;
+            box-shadow: 0 0 30px rgba(255, 0, 85, 0.4);
+            border-radius: 4px;
         }
         canvas {
-            background-color: #050508;
+            background-color: #000;
+            /* Crisp pixel rendering cross-browser */
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
             image-rendering: pixelated;
+            image-rendering: crisp-edges;
             display: block;
         }
-        /* Retro CRT Scanline Effect */
         #crt-overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%);
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
             background-size: 100% 4px;
             pointer-events: none;
         }
         #ui-overlay {
             position: absolute;
             bottom: 0; left: 0; right: 0;
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(10, 10, 18, 0.92);
             border-top: 2px solid #00ffcc;
-            padding: 10px;
+            padding: 12px 16px;
             font-size: 13px;
             display: flex;
             justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 -5px 15px rgba(0, 255, 204, 0.1);
         }
         #leaderboard {
             position: absolute;
-            top: 10px; right: 10px;
-            background: rgba(10, 10, 15, 0.85);
-            border: 1px solid #ff0055;
-            padding: 8px;
+            top: 15px; right: 15px;
+            background: rgba(12, 12, 20, 0.9);
+            border: 2px solid #ff0055;
+            box-shadow: 0 0 10px rgba(255, 0, 85, 0.3);
+            padding: 10px;
             font-size: 11px;
             color: #fff;
-            max-width: 180px;
+            width: 190px;
+            border-radius: 4px;
         }
+        .stat-val { color: #fff; font-weight: bold; }
     </style>
-    <!-- Firebase SDKs for Online Functionality -->
+    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
-<h1 style="color: #ff0055; text-shadow: 2px 2px #00ffcc; margin: 5px 0;">ARCADE SURVIVAL '95</h1>
-<p style="margin: 0 0 10px 0; color: #aaa; font-size: 12px;">[A/D] or [Left/Right] Move | [E] Interact</p>
+<h1>ARCADE SURVIVAL '95</h1>
+<p class="subtitle">[A / D] Move &nbsp;|&nbsp; [E] Interact &nbsp;|&nbsp; [SHIFT] Run</p>
 
 <div id="game-container">
-    <canvas id="gameCanvas" width="640" height="360"></canvas>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
     <div id="crt-overlay"></div>
     
     <div id="leaderboard">
-        <b style="color: #ff0055;">🏆 GLOBAL TOP CREDITS</b>
-        <ol id="leaderboard-list" style="margin: 5px 0 0 0; padding-left: 18px;"></ol>
+        <b style="color: #ff0055; display:block; border-bottom: 1px solid #333; padding-bottom: 4px; margin-bottom: 6px;">🏆 TOP SURVIVORS</b>
+        <ol id="leaderboard-list" style="margin: 0; padding-left: 18px; color: #00ffcc;"></ol>
     </div>
 
     <div id="ui-overlay">
         <div>
-            <span>DAY: <b id="day-val">1</b></span> | 
-            <span>TOKENS: <b id="token-val">1000</b></span> | 
-            <span>CREDITS: <b id="credit-val">0</b></span>
+            DAY: <span class="stat-val" id="day-val">1</span> &nbsp;|&nbsp; 
+            TOKENS: <span class="stat-val" id="token-val" style="color:#00ffcc">1000</span> &nbsp;|&nbsp; 
+            CREDITS: <span class="stat-val" id="credit-val" style="color:#ff0055">0</span>
         </div>
-        <div id="status-msg" style="color: #ffff00;">Press E near machines to play!</div>
+        <div id="status-msg" style="color: #ffff00; font-weight: bold;">Explore the arcade floor...</div>
     </div>
 </div>
 
 <script>
-// --- 1. FIREBASE CONFIGURATION ---
-// Replace the keys below with your actual Firebase project configuration credentials
+// --- 1. FIREBASE SETUP ---
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY_HERE",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+    projectId: "YOUR_PROJECT",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "SENDER_ID",
+    appId: "APP_ID"
 };
 
-// Initialize Firebase (Fallback gracefully to local offline mode if not configured)
 let db = null;
 try {
     firebase.initializeApp(firebaseConfig);
     db = firebase.database();
 } catch (e) {
-    console.warn("Firebase not configured yet. Running in local/offline mode.");
+    console.warn("Firebase running in offline mode.");
 }
 
-// Player Persistent Identity
 let username = localStorage.getItem('arcade_user') || "Player_" + Math.floor(1000 + Math.random() * 9000);
 localStorage.setItem('arcade_user', username);
 
-// --- 2. GAME STATE & SETUP ---
+// --- 2. CANVAS & ENGINE SETUP ---
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
 
 let state = {
     day: 1,
     tokens: 1000,
     credits: 0,
-    playerX: 60,
-    message: `Welcome, ${username}!`
+    playerX: 80,
+    playerY: 280,
+    facing: 'right',
+    isMoving: false,
+    animFrame: 0,
+    message: `Welcome to the Arcade, ${username}!`
 };
 
 const keys = {};
 window.addEventListener('keydown', e => keys[e.code] = true);
 window.addEventListener('keyup', e => keys[e.code] = false);
 
-// Arcade Cabinet Locations & Secrets
-const objects = [
-    { name: "Skee-Ball", x: 100, type: "game", cost: 10, binary: "01000100 (D)" },
-    { name: "OutRun '92", x: 200, type: "game", cost: 15, binary: "01001111 (O)" },
-    { name: "Street Fighter", x: 300, type: "game", cost: 20, binary: "01001110 (N)" },
-    { name: "N40M1 Shop", x: 440, type: "shop" },
-    { name: "Secret Door", x: 560, type: "secret" }
+// Arcade Cabinet Locations & Data
+const cabinets = [
+    { name: "NEO DRIFT '92", x: 120, color: "#ff0055", screenColor: "#0055ff", cost: 10, type: "game" },
+    { name: "CYBER SLAM", x: 260, color: "#00ffcc", screenColor: "#ffaa00", cost: 15, type: "game" },
+    { name: "SPACE RAID 2000", x: 400, color: "#aa00ff", screenColor: "#00ff55", cost: 20, type: "game" },
+    { name: "N40M1'S SHOP", x: 570, color: "#ffaa00", screenColor: "#ff0055", cost: 0, type: "shop" },
+    { name: "SECURITY DOOR", x: 710, color: "#222233", screenColor: "#330000", cost: 0, type: "secret" }
 ];
 
-// --- 3. PIXEL GRAPHICS ENGINE ---
-function drawRect(x, y, w, h, color) {
-    ctx.fillStyle = color;
-    ctx.fillRect(Math.floor(x), Math.floor(y), w, h);
-}
+// --- 3. HIGH-DETAIL ARTWORK DRAWING FUNCTIONS ---
 
-function render() {
-    // Room Background & Floor Grid
-    drawRect(0, 0, canvas.width, canvas.height, "#0e0b16");
-    drawRect(0, 270, canvas.width, 90, "#1b1429");
+function drawBackground() {
+    // Wall Gradient
+    let wallGrad = ctx.createLinearGradient(0, 0, 0, 260);
+    wallGrad.addColorStop(0, '#0a0a14');
+    wallGrad.addColorStop(1, '#181528');
+    ctx.fillStyle = wallGrad;
+    ctx.fillRect(0, 0, canvas.width, 260);
 
-    // Neon Wall Decor
-    drawRect(0, 40, canvas.width, 3, "#ff0055");
-    drawRect(0, 48, canvas.width, 2, "#00ffcc");
+    // Neon Wall Stripe
+    ctx.fillStyle = '#ff0055';
+    ctx.fillRect(0, 70, canvas.width, 4);
+    ctx.fillStyle = '#00ffcc';
+    ctx.fillRect(0, 78, canvas.width, 2);
 
-    // Draw Interactive Cabinets
-    objects.forEach(obj => {
-        if (obj.type === "game") {
-            drawRect(obj.x, 170, 45, 100, "#252836");
-            drawRect(obj.x + 5, 180, 35, 30, "#00ffcc");
-            drawRect(obj.x + 10, 220, 25, 15, "#ff0055");
-            ctx.fillStyle = "#fff";
-            ctx.font = "10px Courier New";
-            ctx.fillText(obj.name, obj.x - 5, 160);
-        } else if (obj.type === "shop") {
-            drawRect(obj.x, 180, 70, 90, "#881144");
-            drawRect(obj.x + 20, 130, 30, 50, "#e6e6e6");
-            drawRect(obj.x + 23, 140, 24, 10, "#00ff00");
-            ctx.fillStyle = "#ff0055";
-            ctx.font = "11px Courier New";
-            ctx.fillText("N40M1", obj.x + 15, 120);
-        } else if (obj.type === "secret") {
-            drawRect(obj.x, 160, 50, 110, "#050505");
-            drawRect(obj.x + 20, 200, 10, 20, "#ff0000");
-            ctx.fillStyle = "#ff0000";
-            ctx.font = "10px Courier New";
-            ctx.fillText("LOCKED", obj.x + 5, 150);
-        }
-    });
+    // Posters on Wall
+    ctx.fillStyle = '#111';
+    ctx.fillRect(40, 90, 40, 55);
+    ctx.fillStyle = '#ff0055';
+    ctx.fillRect(44, 94, 32, 47);
+    ctx.fillStyle = '#fff';
+    ctx.font = '7px Courier New';
+    ctx.fillText('RETRO', 48, 115);
 
-    // Draw Pixel Avatar
-    drawRect(state.playerX, 225, 20, 45, "#00ffcc");
-    drawRect(state.playerX + 3, 210, 14, 15, "#ffccaa");
-    ctx.fillStyle = "#fff";
-    ctx.font = "10px Courier New";
-    ctx.fillText(username, state.playerX - 15, 200);
+    // Floor Grid with Perspective
+    ctx.fillStyle = '#100c1e';
+    ctx.fillRect(0, 260, canvas.width, 140);
 
-    // Interaction Hint Text
-    let nearObj = objects.find(o => Math.abs(o.x - state.playerX) < 35);
-    if (nearObj) {
-        ctx.fillStyle = "#ffff00";
-        ctx.fillText(`[E] ${nearObj.name}`, state.playerX - 10, 185);
+    // Floor Tile Lines
+    ctx.strokeStyle = '#221a3a';
+    ctx.lineWidth = 2;
+    for (let x = 0; x < canvas.width; x += 40) {
+        ctx.beginPath();
+        ctx.moveTo(x, 260);
+        ctx.lineTo(x, 400);
+        ctx.stroke();
     }
+    for (let y = 260; y < 400; y += 25) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+    }
+
+    // Floor Light Reflection Under Cabinets
+    cabinets.forEach(cab => {
+        let grad = ctx.createRadialGradient(cab.x + 30, 265, 5, cab.x + 30, 265, 45);
+        grad.addColorStop(0, cab.color + '44');
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.fillRect(cab.x - 20, 260, 100, 30);
+    });
 }
 
-// --- 4. GAME CONTROLS & DATABASE SYNC ---
-function update() {
-    if ((keys['ArrowRight'] || keys['KeyD']) && state.playerX < canvas.width - 40) state.playerX += 3;
-    if ((keys['ArrowLeft'] || keys['KeyA']) && state.playerX > 10) state.playerX -= 3;
+function drawCabinet(cab) {
+    const x = cab.x;
+    const y = 110;
 
+    // Outer Cabinet Frame
+    ctx.fillStyle = '#0d0d15';
+    ctx.fillRect(x - 2, y - 2, 64, 154);
+
+    // Main Body
+    ctx.fillStyle = cab.color;
+    ctx.fillRect(x, y, 60, 150);
+
+    // Side Shading / Bevel
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(x + 52, y, 8, 150);
+
+    // Marquee Header (Glowing)
+    ctx.fillStyle = '#111';
+    ctx.fillRect(x + 4, y + 6, 52, 22);
+    ctx.fillStyle = cab.color;
+    ctx.fillRect(x + 6, y + 8, 48, 18);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 8px Courier New';
+    ctx.fillText(cab.name.substring(0, 9), x + 8, y + 20);
+
+    // Screen Frame
+    ctx.fillStyle = '#05050a';
+    ctx.fillRect(x + 5, y + 34, 50, 45);
+
+    // Screen Display
+    ctx.fillStyle = cab.screenColor;
+    ctx.fillRect(x + 8, y + 37, 44, 39);
+
+    // CRT Screen Reflection Arc
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.beginPath();
+    ctx.moveTo(x + 8, y + 37);
+    ctx.lineTo(x + 35, y + 37);
+    ctx.lineTo(x + 8, y + 65);
+    ctx.fill();
+
+    // Control Deck
+    ctx.fillStyle = '#22222e';
+    ctx.fillRect(x + 2, y + 82, 56, 22);
+    
+    // Joystick
+    ctx.fillStyle = '#111';
+    ctx.fillRect(x + 12, y + 92, 3, 8);
+    ctx.fillStyle = '#ff0000';
+    ctx.beginPath();
+    ctx.arc(x + 13.5, y + 91, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Arcade Buttons
+    ctx.fillStyle = '#00ffcc';
+    ctx.beginPath(); ctx.arc(x + 28, y + 93, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ff0055';
+    ctx.beginPath(); ctx.arc(x + 36, y + 93, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffff00';
+    ctx.beginPath(); ctx.arc(x + 44, y + 93, 2.5, 0, Math.PI * 2); ctx.fill();
+
+    // Lower Coin Door
+    ctx.fillStyle = '#15151f';
+    ctx.fillRect(x + 10, y + 108, 40, 38);
+    ctx.fillStyle = '#ffaa00'; // Coin slot glow
+    ctx.fillRect(x + 18, y + 115, 6, 2);
+    ctx.fillRect(x + 36, y + 115, 6, 2);
+}
+
+function drawDetailedPlayer() {
+    const x = state.playerX;
+    const y = state.playerY;
+    const bounce = state.isMoving ? Math.sin(state.animFrame * 0.3) * 2 : 0;
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(x + 12, y + 42, 12, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Legs / Pants
+    ctx.fillStyle = '#1e1e2f';
+    ctx.fillRect(x + 4, y + 26 + bounce, 6, 16);
+    ctx.fillRect(x + 14, y + 26 + bounce, 6, 16);
+
+    // Shoes
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x + 2, y + 40 + bounce, 8, 4);
+    ctx.fillRect(x + 14, y + 40 + bounce, 8, 4);
+
+    // Jacket Body
+    ctx.fillStyle = '#00ffcc';
+    ctx.fillRect(x + 3, y + 12 + bounce, 18, 15);
+    // Inner Shirt
+    ctx.fillStyle = '#ff0055';
+    ctx.fillRect(x + 9, y + 12 + bounce, 6, 15);
+
+    // Head / Face
+    ctx.fillStyle = '#ffccaa';
+    ctx.fillRect(x + 5, y - 2 + bounce, 14, 14);
+
+    // Eyes
+    ctx.fillStyle = '#111';
+    if (state.facing === 'right') {
+        ctx.fillRect(x + 14, y + 2 + bounce, 3, 3);
+    } else {
+        ctx.fillRect(x + 7, y + 2 + bounce, 3, 3);
+    }
+
+    // Hair
+    ctx.fillStyle = '#4a2e18';
+    ctx.fillRect(x + 4, y - 5 + bounce, 16, 5);
+    ctx.fillRect(x + 3, y - 2 + bounce, 3, 6);
+}
+
+// --- 4. GAME ENGINE LOOP ---
+
+function update() {
+    let speed = keys['ShiftLeft'] || keys['ShiftRight'] ? 4 : 2.2;
+    state.isMoving = false;
+
+    if (keys['ArrowRight'] || keys['KeyD']) {
+        if (state.playerX < canvas.width - 40) {
+            state.playerX += speed;
+            state.facing = 'right';
+            state.isMoving = true;
+        }
+    }
+    if (keys['ArrowLeft'] || keys['KeyA']) {
+        if (state.playerX > 10) {
+            state.playerX -= speed;
+            state.facing = 'left';
+            state.isMoving = true;
+        }
+    }
+
+    if (state.isMoving) state.animFrame++;
+
+    // Interact Key
     if (keys['KeyE']) {
         keys['KeyE'] = false;
-        let nearObj = objects.find(o => Math.abs(o.x - state.playerX) < 35);
-        if (nearObj) interact(nearObj);
+        let nearCab = cabinets.find(c => Math.abs((c.x + 30) - (state.playerX + 12)) < 35);
+        if (nearCab) interact(nearCab);
     }
 
-    // Dynamic UI Updates
+    // Update UI Elements
     document.getElementById('day-val').innerText = state.day;
     document.getElementById('token-val').innerText = state.tokens;
     document.getElementById('credit-val').innerText = state.credits;
     document.getElementById('status-msg').innerText = state.message;
 }
 
-function interact(obj) {
-    if (obj.type === "game") {
-        if (state.tokens >= obj.cost) {
-            state.tokens -= obj.cost;
-            let earned = Math.floor(Math.random() * 60) + 20;
-            state.credits += earned;
-            state.message = `Won ${earned} Credits! Cabinet Code: ${obj.binary}`;
-            saveScoreOnline();
+function interact(cab) {
+    if (cab.type === "game") {
+        if (state.tokens >= cab.cost) {
+            state.tokens -= cab.cost;
+            let win = Math.floor(Math.random() * 50) + 25;
+            state.credits += win;
+            state.message = `Played ${cab.name}! Earned +${win} Credits!`;
+            saveScore();
         } else {
-            state.message = "Out of tokens for today!";
+            state.message = "Not enough tokens to play!";
         }
-    } else if (obj.type === "shop") {
+    } else if (cab.type === "shop") {
         if (state.credits >= 100) {
             state.credits -= 100;
             state.day++;
             state.tokens = 1000;
-            state.message = "Rented mattress from N40M1! Survived to Day " + state.day;
-            saveScoreOnline();
+            state.message = `Rented bed from N40M1! Survived to Day ${state.day}!`;
+            saveScore();
         } else {
-            state.message = "N40M1: 'Need 100 credits for a bed to survive the night.'";
+            state.message = "N40M1: 'I need 100 credits if you want to sleep here tonight.'";
         }
-    } else if (obj.type === "secret") {
-        let code = prompt("ENTER OVERRIDE PASSWORD:");
+    } else if (cab.type === "secret") {
+        let code = prompt("ENTER PASSCODE:");
         if (code && code.toLowerCase() === "donttrustnaomi") {
-            alert("ACCESS GRANTED.\n\n[FFB LOG]: 'Naomi trapped us in the 1995 loop. Collect binary codes from all machines to build the kill-code.'");
+            alert("SECRET UNLOCKED: 'Naomi trapped everyone in the '95 arcade loop.'");
         } else {
-            alert("ACCESS DENIED.");
+            alert("ACCESS DENIED");
         }
     }
 }
 
-function saveScoreOnline() {
+function saveScore() {
     if (!db) return;
-    db.ref('leaderboard/' + username).set({
-        credits: state.credits,
-        day: state.day
-    });
+    db.ref('leaderboard/' + username).set({ credits: state.credits, day: state.day });
 }
 
-function listenToLeaderboard() {
+function loadLeaderboard() {
     if (!db) return;
-    db.ref('leaderboard').orderByChild('credits').limitToLast(5).on('value', snapshot => {
+    db.ref('leaderboard').orderByChild('credits').limitToLast(5).on('value', snap => {
         const list = document.getElementById('leaderboard-list');
         list.innerHTML = '';
         let entries = [];
-        snapshot.forEach(child => {
-            entries.push({ name: child.key, ...child.val() });
-        });
-        entries.reverse().forEach(entry => {
+        snap.forEach(c => entries.push({ name: c.key, ...c.val() }));
+        entries.reverse().forEach(e => {
             let li = document.createElement('li');
-            li.innerText = `${entry.name}: ${entry.credits}c (Day ${entry.day})`;
+            li.innerHTML = `<b>${e.name}</b>: ${e.credits}c`;
             list.appendChild(li);
         });
     });
 }
 
-// Start Main Game Loop
-listenToLeaderboard();
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // 1. Draw Environment
+    drawBackground();
+
+    // 2. Draw Arcade Cabinets
+    cabinets.forEach(cab => {
+        drawCabinet(cab);
+
+        // Interaction Prompt Text
+        if (Math.abs((cab.x + 30) - (state.playerX + 12)) < 35) {
+            ctx.fillStyle = '#ffff00';
+            ctx.font = 'bold 11px Courier New';
+            ctx.fillText('[E] INTERACT', cab.x + 2, 95);
+        }
+    });
+
+    // 3. Draw Player
+    drawDetailedPlayer();
+}
+
+loadLeaderboard();
 function gameLoop() {
     update();
     render();
