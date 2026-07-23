@@ -4,61 +4,59 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>10-Year Arcade Survival</title>
-    <!-- CSS Link -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <!-- 1. STATS & SURVIVAL DASHBOARD -->
-    <div class="stats-container">
-        <h2>SURVIVAL STATS</h2>
-        
+    <!-- 1. STATS DASHBOARD OVERLAY -->
+    <div class="stats-overlay">
         <div class="stat-box">
             <span class="stat-label">HUNGER</span>
             <div class="bar-bg"><div id="hunger-bar"></div></div>
         </div>
-
         <div class="stat-box">
             <span class="stat-label">ENERGY</span>
             <div class="bar-bg"><div id="energy-bar"></div></div>
         </div>
-
         <div class="stat-box">
             <span class="stat-label">HYGIENE</span>
             <div class="bar-bg"><div id="hygiene-bar"></div></div>
         </div>
-
         <div class="currency-display">
-            <span>Daily Tokens: <strong id="token-display">1000</strong></span>
+            <span>Tokens: <strong id="token-display">1000</strong></span>
             <span>Credits: <strong id="credit-display">0</strong></span>
         </div>
     </div>
 
-    <!-- 2. NAOMI PRIZE COUNTER / SHOP -->
-    <div style="background: #222; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; width: 100%; max-width: 400px;">
-        <h3>NAOMI'S PRIZE COUNTER</h3>
-        <p style="font-size: 12px; margin-bottom: 10px; color: #aaa;">Buy items to store in your Hotbar!</p>
-        <button onclick="buyFromNaomi('steak')" style="margin: 3px; padding: 6px 12px;">Buy Steak ($50)</button>
-        <button onclick="buyFromNaomi('snack')" style="margin: 3px; padding: 6px 12px;">Buy Snack ($15)</button>
-        <button onclick="buyFromNaomi('soap')" style="margin: 3px; padding: 6px 12px;">Buy Soap ($30)</button>
-        <button onclick="buyFromNaomi('bed')" style="margin: 3px; padding: 6px 12px;">Buy Bed ($200)</button>
+    <!-- 2. GAME CANVAS (WALKABLE ARCADE WORLD) -->
+    <div class="canvas-wrapper">
+        <canvas id="gameCanvas" width="800" height="500"></canvas>
+        <p class="controls-hint">Use <strong>WASD</strong> or <strong>Arrow Keys</strong> to walk around. Press <strong>E</strong> to interact with object in front of you!</p>
     </div>
 
-    <!-- 3. ARCADE MACHINES & BED ACTION -->
-    <div style="background: #222; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; width: 100%; max-width: 400px;">
-        <h3>ARCADE FLOOR</h3>
-        <button onclick="if(playMachine('machine1', 100)) completeMinigame(50);" style="margin: 5px; padding: 8px 12px;">Play Machine #1 (100 Tokens)</button>
-        <button onclick="if(playMachine('machine2', 100)) completeMinigame(75);" style="margin: 5px; padding: 8px 12px;">Play Machine #2 (100 Tokens)</button>
-        <br><br>
-        <button onclick="playerStats.sleep()" style="background: #444; color: white; padding: 8px 16px; border: 1px solid #777;">Sleep in Bed (Reset Day)</button>
-        <button onclick="useHeldItem()" style="background: #28a745; color: white; padding: 8px 16px; border: none; margin-left: 5px;">Use Selected Hotbar Item</button>
+    <!-- 3. INTERACTION POPUP / NAOMI SHOP MODAL -->
+    <div id="shop-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>NAOMI'S PRIZE COUNTER</h3>
+            <p>Select an item to buy to your Hotbar:</p>
+            <div class="button-grid">
+                <button class="btn btn-shop" onclick="buyFromNaomi('steak')">Buy Steak ($50)</button>
+                <button class="btn btn-shop" onclick="buyFromNaomi('snack')">Buy Snack ($15)</button>
+                <button class="btn btn-shop" onclick="buyFromNaomi('soap')">Buy Soap ($30)</button>
+                <button class="btn btn-shop" onclick="buyFromNaomi('bed')">Buy Bed ($200)</button>
+            </div>
+            <button class="btn btn-action" onclick="closeShopModal()">Close Shop</button>
+        </div>
     </div>
 
-    <!-- 4. SECRET TERMINAL -->
-    <div style="background: #111; border: 1px solid #00ff00; padding: 15px; border-radius: 8px; text-align: center; width: 100%; max-width: 400px; color: #00ff00;">
-        <h4>SECRET HIGH SCORE TERMINAL</h4>
-        <input type="text" id="terminal-input" placeholder="ENTER PASSWORD..." style="background: #000; color: #00ff00; border: 1px solid #00ff00; padding: 5px; margin-top: 5px; text-align: center;">
-        <button onclick="enterSecretTerminalPassword(document.getElementById('terminal-input').value)" style="background: #00ff00; color: #000; font-weight: bold; padding: 5px 10px; border: none; margin-top: 5px;">SUBMIT</button>
+    <!-- 4. SECRET TERMINAL MODAL -->
+    <div id="terminal-modal" class="modal hidden">
+        <div class="modal-content terminal-card">
+            <h4>SECRET HIGH SCORE TERMINAL</h4>
+            <input type="text" id="terminal-input" placeholder="ENTER PASSWORD..." class="terminal-input">
+            <button class="btn btn-terminal" onclick="enterSecretTerminalPassword(document.getElementById('terminal-input').value)">SUBMIT</button>
+            <button class="btn btn-action" onclick="closeTerminalModal()" style="margin-top: 8px;">Close</button>
+        </div>
     </div>
 
     <!-- 5. FLOATING CENTER NOTIFICATION POPUP -->
@@ -72,12 +70,11 @@
         <div id="hotbar-slot-4" class="hotbar-slot" onclick="selectHotbarSlot(3)"></div>
         <div id="hotbar-slot-5" class="hotbar-slot" onclick="selectHotbarSlot(4)"></div>
         <div id="hotbar-slot-6" class="hotbar-slot" onclick="selectHotbarSlot(5)"></div>
-        <div id="hotbar-slot-7" class="hotbar-slot" onclick="selectHotbarSlot(7)"></div>
+        <div id="hotbar-slot-7" class="hotbar-slot" onclick="selectHotbarSlot(6)"></div>
         <div id="hotbar-slot-8" class="hotbar-slot" onclick="selectHotbarSlot(7)"></div>
         <div id="hotbar-slot-9" class="hotbar-slot" onclick="selectHotbarSlot(8)"></div>
     </div>
 
-    <!-- JavaScript Link -->
     <script src="script.js"></script>
 </body>
 </html>
