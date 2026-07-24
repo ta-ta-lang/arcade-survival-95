@@ -1,18 +1,17 @@
-/* Reset & Fullscreen Setup */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
   user-select: none;
+  font-family: 'Courier New', Courier, monospace;
 }
 
 body, html {
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   overflow: hidden;
-  background-color: #0d0e15;
-  font-family: 'Courier New', Courier, monospace;
-  color: #00ffcc;
+  background-color: #050508;
+  color: #fff;
 }
 
 #game-container {
@@ -24,64 +23,160 @@ body, html {
   align-items: center;
 }
 
-/* Retro CRT/Canvas Viewport */
-canvas {
-  background: #000;
+/* RETRO PIXEL CANVAS */
+canvas#gameCanvas {
+  background: #101018;
   display: block;
   image-rendering: pixelated;
-  box-shadow: 0 0 20px rgba(0, 255, 204, 0.2);
+  image-rendering: crisp-edges;
+  box-shadow: 0 0 30px rgba(0, 255, 204, 0.15);
 }
 
-/* UI Overlay Layer */
-#ui-layer {
+/* TOP HUD */
+#top-hud {
   position: absolute;
-  top: 20px;
+  top: 15px;
   left: 20px;
   right: 20px;
   display: flex;
   justify-content: space-between;
+  align-items: center;
   pointer-events: none;
+  z-index: 10;
+}
+
+.hud-box {
+  background: #000;
+  border: 3px solid #ff0055;
+  padding: 10px 15px;
   font-weight: bold;
-  font-size: 1.2rem;
-  text-shadow: 0 0 5px #00ffcc;
+  font-size: 1.1rem;
+  color: #ff0055;
+  box-shadow: 4px 4px 0px #000;
 }
 
-.stat-box {
-  background: rgba(0, 0, 0, 0.7);
-  padding: 8px 16px;
-  border: 2px solid #00ffcc;
-  border-radius: 4px;
+.hud-stats {
+  display: flex;
+  gap: 15px;
+  background: rgba(0,0,0,0.85);
+  padding: 10px 15px;
+  border: 3px solid #00ffcc;
+  box-shadow: 4px 4px 0px #000;
 }
 
-/* Terminal Overlay */
-#terminal-modal {
-  position: absolute;
-  width: 400px;
-  background: rgba(10, 10, 15, 0.95);
-  border: 2px solid #ff0055;
-  padding: 20px;
-  box-shadow: 0 0 25px rgba(255, 0, 85, 0.4);
+.stat-container {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 3px;
+  font-size: 0.75rem;
+  color: #00ffcc;
+  font-weight: bold;
 }
 
-#terminal-modal.hidden {
-  display: none;
+.bar-bg {
+  width: 100px;
+  height: 12px;
+  background: #222;
+  border: 2px solid #00ffcc;
 }
 
-.terminal-header {
+.bar-fill {
+  height: 100%;
+  width: 100%;
+  transition: width 0.2s ease-in-out;
+}
+.bar-fill.hunger { background: #ff9900; }
+.bar-fill.energy { background: #ffff00; }
+.bar-fill.hygiene { background: #0099ff; }
+
+/* HOTBAR HUD (MINECRAFT STYLE) */
+#hotbar-container {
+  position: absolute;
+  bottom: 20px;
+  display: flex;
+  gap: 6px;
+  background: #111;
+  border: 4px solid #444;
+  padding: 6px;
+  box-shadow: 0 0 15px #000;
+  z-index: 10;
+}
+
+.hotbar-slot {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  background: #222;
+  border: 3px solid #666;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.hotbar-slot.active {
+  border-color: #00ffcc;
+  background: #333;
+  box-shadow: inset 0 0 8px #00ffcc;
+}
+
+.slot-num {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-size: 10px;
+  color: #aaa;
+  font-weight: bold;
+}
+
+.item-icon {
+  image-rendering: pixelated;
+}
+
+/* DIZZY DEBUFF OVERLAY */
+#dizzy-overlay {
+  position: absolute;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(255,0,85,0.3) 0%, rgba(0,0,0,0.8) 100%);
+  animation: pulse-dizzy 0.8s infinite alternate;
+  z-index: 50;
+}
+
+#dizzy-overlay.hidden { display: none; }
+
+@keyframes pulse-dizzy {
+  0% { transform: scale(1) rotate(0deg); opacity: 0.6; }
+  100% { transform: scale(1.05) rotate(2deg); opacity: 0.9; }
+}
+
+/* DIALOGUE & TERMINAL BOX */
+#dialogue-box {
+  position: absolute;
+  bottom: 90px;
+  width: 600px;
+  background: #000;
+  border: 4px solid #ff0055;
+  padding: 15px;
+  box-shadow: 6px 6px 0px #ff0055;
+  z-index: 20;
+}
+#dialogue-box.hidden { display: none; }
+
+#dialogue-name {
   color: #ff0055;
   font-weight: bold;
-  border-bottom: 1px solid #ff0055;
-  padding-bottom: 5px;
+  font-size: 1.1rem;
+  margin-bottom: 5px;
 }
-
-#terminal-input {
-  background: #000;
-  border: 1px solid #ff0055;
+#dialogue-text {
   color: #00ffcc;
-  padding: 8px;
-  font-family: inherit;
-  outline: none;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+#dialogue-prompt {
+  text-align: right;
+  font-size: 0.75rem;
+  color: #888;
+  margin-top: 8px;
 }
